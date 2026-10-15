@@ -18,6 +18,7 @@ class ScheduleExceptionItem extends Model
         'custom_title',
         'is_live',
         'is_repeat',
+        'is_package',
         'is_active',
         'note',
     ];
@@ -25,6 +26,7 @@ class ScheduleExceptionItem extends Model
     protected $casts = [
         'is_live' => 'boolean',
         'is_repeat' => 'boolean',
+        'is_package' => 'boolean',
         'is_active' => 'boolean',
     ];
 

@@ -244,4 +244,171 @@ class ScheduleCalendarTest extends TestCase
         ]);
         $this->assertEquals('https://example.com/program.jpg', $item2->effective_image);
     }
+
+    public function test_active_and_passive_overlap_behavior_scenarios(): void
+    {
+        $user = User::factory()->create(['role' => 'administrator']);
+        $template = ScheduleTemplate::create(['name' => 'Overlap Test Akışı', 'slug' => 'overlap-test', 'status' => 'published']);
+        $template2 = ScheduleTemplate::create(['name' => 'Diğer Şablon', 'slug' => 'diger-sablon', 'status' => 'draft']);
+        $progA = Program::create(['name' => 'Program A', 'slug' => 'prog-a', 'is_active' => true]);
+        $progB = Program::create(['name' => 'Program B', 'slug' => 'prog-b', 'is_active' => true]);
+
+        // Scenario 1: A ACTIVE 14:00-15:00. Creating B ACTIVE 14:00-15:00 on same day -> REJECT
+        $itemA = ScheduleTemplateItem::create([
+            'schedule_template_id' => $template->id,
+            'program_id' => $progA->id,
+            'day_of_week' => 0,
+            'start_time' => '14:00',
+            'end_time' => '15:00',
+            'is_active' => true,
+        ]);
+
+        $service = new ScheduleCalendarService();
+        $this->assertTrue($service->checkOverlap($template->id, 0, '14:00', '15:00'));
+
+        // Scenario 2: A PASSIVE 14:00-15:00. Creating B ACTIVE 14:00-15:00 -> ALLOW
+        $itemA->update(['is_active' => false]);
+        $this->assertFalse($service->checkOverlap($template->id, 0, '14:00', '15:00'));
+
+        $itemB = ScheduleTemplateItem::create([
+            'schedule_template_id' => $template->id,
+            'program_id' => $progB->id,
+            'day_of_week' => 0,
+            'start_time' => '14:00',
+            'end_time' => '15:00',
+            'is_active' => true,
+        ]);
+        $this->assertDatabaseHas('schedule_template_items', ['id' => $itemB->id, 'is_active' => true]);
+
+        // Scenario 3: Partial overlap with passive item -> ALLOW
+        $itemB->delete();
+        $this->assertFalse($service->checkOverlap($template->id, 0, '14:30', '15:30'));
+
+        // Scenario 4: Partial overlap with active item -> REJECT
+        $itemB = ScheduleTemplateItem::create([
+            'schedule_template_id' => $template->id,
+            'program_id' => $progB->id,
+            'day_of_week' => 0,
+            'start_time' => '14:00',
+            'end_time' => '15:00',
+            'is_active' => true,
+        ]);
+        $this->assertTrue($service->checkOverlap($template->id, 0, '14:30', '15:30'));
+
+        // Scenario 5: A PASSIVE, B ACTIVE in same slot. A toggle ACTIVE -> REJECT
+        Livewire::actingAs($user)
+            ->test(ScheduleCalendarPage::class)
+            ->call('toggleItemActive', $itemA->id);
+
+        $this->assertFalse($itemA->fresh()->is_active);
+
+        // Scenario 6: B deleted -> A toggle ACTIVE -> ALLOW
+        $itemB->delete();
+        Livewire::actingAs($user)
+            ->test(ScheduleCalendarPage::class)
+            ->call('toggleItemActive', $itemA->id);
+
+        $this->assertTrue($itemA->fresh()->is_active);
+
+        // Scenario 7: Same slot on another day -> ALLOW (no conflict across days)
+        $this->assertFalse($service->checkOverlap($template->id, 1, '14:00', '15:00'));
+
+        // Scenario 8: Same slot on another template -> ALLOW (no conflict across templates)
+        $this->assertFalse($service->checkOverlap($template2->id, 0, '14:00', '15:00'));
+
+        // Scenario 9 & 10: Audit Log and Cache Invalidation on toggle
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'updated',
+            'subject_id' => $itemA->id,
+        ]);
+    }
+
+    public function test_livewire_create_item_action_allows_adding_active_item_when_passive_item_exists_in_same_slot(): void
+    {
+        $user = User::factory()->create(['role' => 'administrator']);
+        $template = ScheduleTemplate::create(['name' => 'Livewire Create Test', 'slug' => 'livewire-create-test', 'status' => 'published']);
+        $progA = Program::create(['name' => 'Program A', 'slug' => 'prog-a', 'is_active' => true]);
+        $progB = Program::create(['name' => 'Program B', 'slug' => 'prog-b', 'is_active' => true]);
+
+        // Existing item A: Tuesday (day_of_week = 1), 14:00-15:00, is_active = false
+        $itemA = ScheduleTemplateItem::create([
+            'schedule_template_id' => $template->id,
+            'program_id' => $progA->id,
+            'day_of_week' => 1,
+            'start_time' => '14:00',
+            'end_time' => '15:00',
+            'is_active' => false,
+        ]);
+
+        // Call create_item action for Program B: Tuesday (day_of_week = 1), 14:00-15:00, is_active = true
+        Livewire::actingAs($user)
+            ->test(ScheduleCalendarPage::class, ['template' => $template->id])
+            ->callAction('create_item', [
+                'program_id' => $progB->id,
+                'day_of_week' => 1,
+                'start_time' => '14:00',
+                'end_time' => '15:00',
+                'is_active' => true,
+            ])
+            ->assertHasNoActionErrors();
+
+        $this->assertDatabaseHas('schedule_template_items', [
+            'schedule_template_id' => $template->id,
+            'program_id' => $progB->id,
+            'day_of_week' => 1,
+            'start_time' => '14:00',
+            'end_time' => '15:00',
+            'is_active' => true,
+        ]);
+    }
+
+    public function test_package_broadcast_creation_and_rendering(): void
+    {
+        $user = User::factory()->create();
+
+        \App\Models\ScheduleException::query()->delete();
+        ScheduleTemplateItem::query()->delete();
+        ScheduleTemplate::query()->delete();
+
+        $template = ScheduleTemplate::create([
+            'name' => 'Paket Sezonu',
+            'slug' => 'paket-sezonu',
+            'status' => 'published',
+            'is_active' => true,
+            'priority' => 1000,
+        ]);
+
+        $program = Program::create(['name' => 'Paket Program', 'slug' => 'paket-program', 'is_active' => true]);
+
+        $todayIso = (int) now()->dayOfWeekIso - 1;
+        if ($todayIso < 0 || $todayIso > 6) {
+            $todayIso = 0;
+        }
+
+        $item = ScheduleTemplateItem::create([
+            'schedule_template_id' => $template->id,
+            'program_id' => $program->id,
+            'day_of_week' => $todayIso,
+            'start_time' => '10:00',
+            'end_time' => '11:00',
+            'is_live' => false,
+            'is_repeat' => false,
+            'is_package' => true,
+            'is_active' => true,
+        ]);
+
+        // Verify edit form fills is_package correctly
+        Livewire::actingAs($user)
+            ->test(ScheduleCalendarPage::class, ['selectedTemplateId' => $template->id, 'selectedDay' => $todayIso])
+            ->mountTableAction('edit', $item)
+            ->assertTableActionDataSet([
+                'is_package' => true,
+            ]);
+
+        // Verify public schedule page renders Paket Program and PAKET badge
+        $response = $this->get(route('schedule.index'));
+        $response->assertOk();
+        $response->assertSee('Paket Program');
+        $response->assertSee('PAKET');
+    }
 }

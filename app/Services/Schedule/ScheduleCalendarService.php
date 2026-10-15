@@ -56,25 +56,26 @@ class ScheduleCalendarService
     {
         $query = ScheduleTemplateItem::query()
             ->where('schedule_template_id', $templateId)
-            ->where('day_of_week', $dayOfWeek);
+            ->where('day_of_week', $dayOfWeek)
+            ->where('is_active', true);
 
         if ($ignoreItemId) {
             $query->where('id', '!=', $ignoreItemId);
         }
 
         $start = Carbon::parse($startTime)->format('H:i:s');
-        $end = $endTime ? Carbon::parse($endTime)->format('H:i:s') : '23:59:59';
+        $end = ($endTime && $endTime !== '00:00') ? Carbon::parse($endTime)->format('H:i:s') : '23:59:59';
 
         return $query->where(function ($q) use ($start, $end) {
-            $q->where(function ($q2) use ($start, $end) {
+            $q->where(function ($q2) use ($start) {
                 $q2->where('start_time', '<=', $start)
-                   ->where('end_time', '>', $start);
-            })->orWhere(function ($q3) use ($start, $end) {
+                   ->whereRaw("COALESCE(NULLIF(end_time, '00:00:00'), '23:59:59') > ?", [$start]);
+            })->orWhere(function ($q3) use ($end) {
                 $q3->where('start_time', '<', $end)
-                   ->where('end_time', '>=', $end);
+                   ->whereRaw("COALESCE(NULLIF(end_time, '00:00:00'), '23:59:59') >= ?", [$end]);
             })->orWhere(function ($q4) use ($start, $end) {
                 $q4->where('start_time', '>=', $start)
-                   ->where('end_time', '<=', $end);
+                   ->whereRaw("COALESCE(NULLIF(end_time, '00:00:00'), '23:59:59') <= ?", [$end]);
             });
         })->exists();
     }
@@ -151,5 +152,89 @@ class ScheduleCalendarService
     {
         SiteCache::forgetMenu('header_primary');
         return $template->publish($userId, $summary);
+    }
+
+    public function getExceptionForDate(string $date): ?\App\Models\ScheduleException
+    {
+        return \App\Models\ScheduleException::query()
+            ->whereDate('exception_date', $date)
+            ->where('status', 'published')
+            ->with('items.program')
+            ->first();
+    }
+
+    public function createSpecialBroadcast(array $data): \App\Models\ScheduleExceptionItem
+    {
+        $exceptionDate = $data['exception_date'];
+        $overrideType = $data['override_type'] ?? 'replace_all';
+
+        $exception = \App\Models\ScheduleException::query()
+            ->whereDate('exception_date', $exceptionDate)
+            ->first();
+
+        if (! $exception) {
+            $exception = \App\Models\ScheduleException::create([
+                'exception_date' => $exceptionDate,
+                'name' => 'Özel Yayın Akışı (' . Carbon::parse($exceptionDate)->format('d.m.Y') . ')',
+                'description' => $data['note'] ?? 'Özel yayın akışı',
+                'override_type' => $overrideType,
+                'status' => 'published',
+            ]);
+        } else {
+            $exception->update([
+                'override_type' => $overrideType,
+                'status' => 'published',
+            ]);
+        }
+
+        $item = $exception->items()->create([
+            'program_id' => $data['program_id'],
+            'start_time' => $data['start_time'],
+            'end_time' => $data['end_time'] ?? null,
+            'custom_title' => $data['custom_title'] ?? null,
+            'is_live' => (bool) ($data['is_live'] ?? false),
+            'is_repeat' => (bool) ($data['is_repeat'] ?? false),
+            'is_active' => true,
+            'note' => $data['note'] ?? null,
+        ]);
+
+        \App\Services\Audit\AuditLogger::log(
+            action: 'created',
+            message: sprintf(
+                'Özel yayın oluşturuldu (%s Tarihi, %s %s–%s). Mod: %s',
+                Carbon::parse($exceptionDate)->format('d.m.Y'),
+                $item->display_title,
+                Carbon::parse($item->start_time)->format('H:i'),
+                $item->end_time ? Carbon::parse($item->end_time)->format('H:i') : '23:59',
+                $overrideType === 'replace_all' ? 'Tüm Akış Değiştirildi' : 'Mevcut Akışa Eklendi'
+            ),
+            subject: $item,
+            subjectLabel: 'Özel Yayın Akışı'
+        );
+
+        SiteCache::forgetMenu('header_primary');
+        SiteCache::forgetHomeHeroPrograms();
+
+        return $item;
+    }
+
+    public function deleteException(int $exceptionId): void
+    {
+        $exception = \App\Models\ScheduleException::find($exceptionId);
+        if (! $exception) {
+            return;
+        }
+
+        $dateStr = Carbon::parse($exception->exception_date)->format('d.m.Y');
+        $exception->delete();
+
+        \App\Services\Audit\AuditLogger::log(
+            action: 'deleted',
+            message: sprintf('%s tarihli özel yayın akışı kaldırıldı. Normal yayın akışına dönüldü.', $dateStr),
+            subjectLabel: 'Özel Yayın Akışı'
+        );
+
+        SiteCache::forgetMenu('header_primary');
+        SiteCache::forgetHomeHeroPrograms();
     }
 }

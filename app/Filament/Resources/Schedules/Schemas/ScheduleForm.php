@@ -55,6 +55,10 @@ class ScheduleForm
                     ->label('Tekrar Yayın')
                     ->default(false),
 
+                Toggle::make('is_package')
+                    ->label('Paket Yayın')
+                    ->default(false),
+
                 Toggle::make('is_active')
                     ->label('Aktif')
                     ->default(true),

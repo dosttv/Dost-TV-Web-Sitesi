@@ -32,6 +32,7 @@ return new class extends Migration
             $table->string('custom_title')->nullable();
             $table->boolean('is_live')->default(false);
             $table->boolean('is_repeat')->default(false);
+            $table->boolean('is_package')->default(false);
             $table->boolean('is_active')->default(true);
             $table->text('note')->nullable();
             $table->timestamps();

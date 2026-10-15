@@ -58,6 +58,12 @@
                                     </span>
                                 @endif
 
+                                @if(!empty($item['is_package']))
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                                        Paket
+                                    </span>
+                                @endif
+
                                 {{-- Zaman Durumu Rozeti --}}
                                 @if($item['status_key'] === 'now_playing')
                                     <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-rose-500 text-white shadow-xs animate-pulse">

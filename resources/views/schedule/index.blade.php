@@ -225,7 +225,7 @@
 
                                     <!-- Program Info Column (Right): flex-1 min-w-0 -->
                                     <div class="flex-1 min-w-0 flex flex-col justify-center gap-0.5">
-                                        @if ($isNowPlaying || $item->is_live || $item->is_repeat)
+                                        @if ($isNowPlaying || $item->is_live || $item->is_repeat || !empty($item->is_package))
                                             <div class="min-w-0 flex items-center flex-wrap gap-1 mb-0.5">
                                                 @if ($isNowPlaying)
                                                     <span class="flex-shrink-0 inline-flex items-center gap-1 rounded-full bg-rose-500 px-2 py-0.5 text-[9px] sm:text-xs font-black uppercase tracking-wider text-white shadow">
@@ -243,6 +243,12 @@
                                                 @if ($item->is_repeat)
                                                     <span class="flex-shrink-0 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 text-[9px] sm:text-[10px] font-medium">
                                                         TEKRAR
+                                                    </span>
+                                                @endif
+
+                                                @if (!empty($item->is_package))
+                                                    <span class="flex-shrink-0 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-1.5 py-0.5 text-[9px] sm:text-[10px] font-medium">
+                                                        PAKET
                                                     </span>
                                                 @endif
                                             </div>

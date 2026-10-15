@@ -46,22 +46,22 @@ return [
         // set PUBLIC_DISK_DRIVER=s3 as a custom env var to switch this disk over
         // (Cloud only injects credentials, it does not rewrite this config file).
         'public' => array_filter([
-            'driver' => env('PUBLIC_DISK_DRIVER', 'local'),
+            'driver' => in_array(env('PUBLIC_DISK_DRIVER', env('MEDIA_DISK', 'local')), ['local', 's3'], true) ? env('PUBLIC_DISK_DRIVER', env('MEDIA_DISK', 'local')) : 'local',
             // A local filesystem path here would be wrong for the s3 driver (it
             // would prefix every object key with this absolute path and break
             // every existing "programs/xxx.png"-style path already in the DB),
             // so only set it for the local driver.
-            'root' => env('PUBLIC_DISK_DRIVER', 'local') === 'local' ? storage_path('app/public') : null,
+            'root' => (env('PUBLIC_DISK_DRIVER', env('MEDIA_DISK', 'local')) === 's3') ? null : storage_path('app/public'),
             // Must also switch on the driver, not just on whether AWS_URL happens
             // to be set - otherwise local dev would generate Cloud bucket URLs for
             // files it is actually serving from its own local /storage symlink.
-            'url' => env('PUBLIC_DISK_DRIVER', 'local') === 'local'
-                ? rtrim(env('APP_URL', 'http://localhost'), '/').'/storage'
-                : env('AWS_URL'),
+            'url' => (env('PUBLIC_DISK_DRIVER', env('MEDIA_DISK', 'local')) === 's3')
+                ? env('AWS_URL')
+                : rtrim(env('APP_URL', 'http://localhost'), '/').'/storage',
             // Cloudflare R2 (what Laravel Cloud Object Storage runs on) manages
             // visibility at the bucket level and rejects per-object ACL requests
             // with a "NotImplemented" error, so this must only be set for local.
-            'visibility' => env('PUBLIC_DISK_DRIVER', 'local') === 'local' ? 'public' : null,
+            'visibility' => (env('PUBLIC_DISK_DRIVER', env('MEDIA_DISK', 'local')) === 's3') ? null : 'public',
             'throw' => false,
             'report' => false,
             'key' => env('AWS_ACCESS_KEY_ID'),
@@ -69,7 +69,6 @@ return [
             'region' => env('AWS_DEFAULT_REGION'),
             'bucket' => env('AWS_BUCKET'),
             'endpoint' => env('AWS_ENDPOINT'),
-            'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
         ], fn ($value) => $value !== null),
 
         's3' => [

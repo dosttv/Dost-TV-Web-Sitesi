@@ -28,6 +28,7 @@ class Schedule extends Model
         'end_time',
         'is_live',
         'is_repeat',
+        'is_package',
         'is_active',
         'sort_order',
         'custom_title',
@@ -38,6 +39,7 @@ class Schedule extends Model
         'day_of_week' => 'integer',
         'is_live' => 'boolean',
         'is_repeat' => 'boolean',
+        'is_package' => 'boolean',
         'is_active' => 'boolean',
         'sort_order' => 'integer',
     ];

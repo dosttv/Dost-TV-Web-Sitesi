@@ -9,7 +9,10 @@ use App\Models\Schedule;
 use App\Models\ScheduleTemplate;
 use App\Models\ScheduleTemplateItem;
 use App\Models\ScheduleVersionHistory;
+use App\Services\Audit\AuditLogger;
 use App\Services\Schedule\ScheduleCalendarService;
+use App\Services\Schedule\ScheduleExcelExportService;
+use App\Support\SiteCache;
 use Illuminate\Support\Carbon;
 use BackedEnum;
 use Filament\Actions\Action;
@@ -233,15 +236,59 @@ class ScheduleCalendarPage extends Page implements HasActions, HasForms, HasTabl
     public function toggleItemActive(int $itemId): void
     {
         $item = ScheduleTemplateItem::find($itemId);
-        if ($item) {
-            $item->update(['is_active' => ! $item->is_active]);
-            $this->resetTable();
-
-            Notification::make()
-                ->title('Yayın durumu güncellendi: ' . ($item->fresh()->is_active ? 'Aktif' : 'Pasif'))
-                ->success()
-                ->send();
+        if (! $item) {
+            return;
         }
+
+        $newActiveState = ! $item->is_active;
+
+        if ($newActiveState) {
+            $service = app(ScheduleCalendarService::class);
+            $hasOverlap = $service->checkOverlap(
+                $item->schedule_template_id,
+                (int) $item->day_of_week,
+                $item->start_time,
+                $item->end_time,
+                $item->id
+            );
+
+            if ($hasOverlap) {
+                Notification::make()
+                    ->title('Aktifleştirme Engellendi!')
+                    ->body('Bu saat aralığında aktif bir yayın zaten bulunuyor.')
+                    ->danger()
+                    ->send();
+                return;
+            }
+        }
+
+        $item->update(['is_active' => $newActiveState]);
+        $this->resetTable();
+
+        $startTimeStr = Carbon::parse($item->start_time)->format('H:i');
+        $endTimeStr = $item->end_time ? Carbon::parse($item->end_time)->format('H:i') : '23:59';
+        $logMessage = sprintf(
+            '%s %s %s–%s %s.',
+            $item->display_title,
+            $item->day_name,
+            $startTimeStr,
+            $endTimeStr,
+            $newActiveState ? 'tekrar akışta görünür yapıldı' : 'akışta gizlendi'
+        );
+
+        AuditLogger::log(
+            action: 'updated',
+            message: $logMessage,
+            subject: $item,
+            subjectLabel: 'Yayın Akışı'
+        );
+
+        SiteCache::forgetHomeHeroPrograms();
+
+        Notification::make()
+            ->title('Yayın durumu güncellendi: ' . ($newActiveState ? 'Akışta Görünür' : 'Akışta Gizli'))
+            ->success()
+            ->send();
     }
 
     public function selectDay(int $day): void
@@ -251,15 +298,78 @@ class ScheduleCalendarPage extends Page implements HasActions, HasForms, HasTabl
         $this->resetTable();
     }
 
+    public bool $showExceptionItems = true;
+
+    public function toggleExceptionView(): void
+    {
+        $this->showExceptionItems = ! $this->showExceptionItems;
+        $this->resetTable();
+    }
+
     public function selectDayTab(string $day): void
     {
         $this->selectDay((int) $day);
+    }
+
+    public function getExceptionForSelectedDayProperty(): ?\App\Models\ScheduleException
+    {
+        $startOfWeek = Carbon::now()->startOfWeek(Carbon::MONDAY);
+        $selectedDate = $startOfWeek->copy()->addDays((int) $this->selectedDay)->toDateString();
+        return app(ScheduleCalendarService::class)->getExceptionForDate($selectedDate);
+    }
+
+    public function removeSelectedDayException(int $exceptionId): void
+    {
+        app(ScheduleCalendarService::class)->deleteException($exceptionId);
+        $this->resetTable();
+        Notification::make()
+            ->title('Özel yayın akışı kaldırıldı.')
+            ->body('Bu tarih için normal haftalık şablon akışına geri dönüldü.')
+            ->success()
+            ->send();
+    }
+
+    public function getActiveOverlaps(int $templateId, int $dayOfWeek, string $startTime, ?string $endTime, ?int $ignoreItemId = null): \Illuminate\Support\Collection
+    {
+        $query = ScheduleTemplateItem::query()
+            ->where('schedule_template_id', $templateId)
+            ->where('day_of_week', $dayOfWeek)
+            ->where('is_active', true)
+            ->with('program');
+
+        if ($ignoreItemId) {
+            $query->where('id', '!=', $ignoreItemId);
+        }
+
+        $start = Carbon::parse($startTime)->format('H:i:s');
+        $end = ($endTime && $endTime !== '00:00') ? Carbon::parse($endTime)->format('H:i:s') : '23:59:59';
+
+        return $query->where(function ($q) use ($start, $end) {
+            $q->where(function ($q2) use ($start) {
+                $q2->where('start_time', '<=', $start)
+                   ->whereRaw("COALESCE(NULLIF(end_time, '00:00:00'), '23:59:59') > ?", [$start]);
+            })->orWhere(function ($q3) use ($end) {
+                $q3->where('start_time', '<', $end)
+                   ->whereRaw("COALESCE(NULLIF(end_time, '00:00:00'), '23:59:59') >= ?", [$end]);
+            })->orWhere(function ($q4) use ($start, $end) {
+                $q4->where('start_time', '>=', $start)
+                   ->whereRaw("COALESCE(NULLIF(end_time, '00:00:00'), '23:59:59') <= ?", [$end]);
+            });
+        })->get();
     }
 
     public function table(Table $table): Table
     {
         return $table
             ->query(function () {
+                $dayException = $this->exceptionForSelectedDay;
+
+                if ($dayException && $this->showExceptionItems) {
+                    return \App\Models\ScheduleExceptionItem::query()
+                        ->where('schedule_exception_id', $dayException->id)
+                        ->with('program');
+                }
+
                 $templateId = $this->selectedTemplateId ?: 0;
 
                 return ScheduleTemplateItem::query()
@@ -270,39 +380,90 @@ class ScheduleCalendarPage extends Page implements HasActions, HasForms, HasTabl
             ->columns([
                 TextColumn::make('start_time')
                     ->label('Başlangıç')
-                    ->state(fn (ScheduleTemplateItem $record) => $record->start_time ? Carbon::parse($record->start_time)->format('H:i') : '—')
+                    ->state(fn ($record) => $record->start_time ? Carbon::parse($record->start_time)->format('H:i') : '—')
                     ->sortable()
                     ->weight(FontWeight::Bold)
                     ->color('primary'),
 
                 TextColumn::make('end_time')
                     ->label('Bitiş')
-                    ->state(fn (ScheduleTemplateItem $record) => $record->end_time ? Carbon::parse($record->end_time)->format('H:i') : '—')
+                    ->state(fn ($record) => $record->end_time ? Carbon::parse($record->end_time)->format('H:i') : '—')
                     ->sortable()
                     ->color('gray'),
 
                 TextColumn::make('display_title')
                     ->label('Program')
-                    ->description(fn (ScheduleTemplateItem $record) => $record->note ?: ($record->custom_title ?: null))
+                    ->description(fn ($record) => $record->note ?: ($record->custom_title ?: null))
                     ->searchable(query: fn ($query, $search) => $query->whereHas('program', fn ($q) => $q->where('name', 'like', "%{$search}%")))
                     ->weight(FontWeight::Bold),
 
                 TextColumn::make('type_badge')
                     ->label('Yayın Türü')
                     ->badge()
-                    ->state(fn (ScheduleTemplateItem $record) => match (true) {
+                    ->state(fn ($record) => match (true) {
                         (bool) $record->is_live => 'CANLI YAYIN',
                         (bool) $record->is_repeat => 'TEKRAR YAYIN',
+                        (bool) ($record->is_package ?? false) => 'PAKET YAYIN',
                         default => 'NORMAL',
                     })
                     ->color(fn (string $state) => match ($state) {
                         'CANLI YAYIN' => 'danger',
                         'TEKRAR YAYIN' => 'warning',
+                        'PAKET YAYIN' => 'info',
                         default => 'gray',
                     }),
 
                 ToggleColumn::make('is_active')
-                    ->label('Aktif'),
+                    ->label('Akışta Görünür')
+                    ->beforeStateUpdated(function ($record, bool $state) {
+                        if ($state && $record instanceof ScheduleTemplateItem) {
+                            $overlaps = $this->getActiveOverlaps(
+                                $record->schedule_template_id,
+                                (int) $record->day_of_week,
+                                $record->start_time,
+                                $record->end_time,
+                                $record->id
+                            );
+
+                            if ($overlaps->isNotEmpty()) {
+                                $overlapList = $overlaps->map(fn ($item) => [
+                                    'title' => $item->display_title,
+                                    'start_time' => Carbon::parse($item->start_time)->format('H:i'),
+                                    'end_time' => $item->end_time ? Carbon::parse($item->end_time)->format('H:i') : '23:59',
+                                    'status' => 'Aktif',
+                                ])->all();
+
+                                $this->mountAction('confirm_overlap', [
+                                    'action_type' => 'toggle_active',
+                                    'submit_label' => 'Yine de Aktif Et',
+                                    'record_id' => $record->id,
+                                    'overlaps' => $overlapList,
+                                ]);
+
+                                return false;
+                            }
+                        }
+                    })
+                    ->afterStateUpdated(function ($record, bool $state) {
+                        $startTimeStr = Carbon::parse($record->start_time)->format('H:i');
+                        $endTimeStr = $record->end_time ? Carbon::parse($record->end_time)->format('H:i') : '23:59';
+                        $logMessage = sprintf(
+                            '%s %s–%s %s.',
+                            $record->display_title,
+                            $startTimeStr,
+                            $endTimeStr,
+                            $state ? 'tekrar akışta görünür yapıldı' : 'akışta gizlendi'
+                        );
+
+                        AuditLogger::log(
+                            action: 'updated',
+                            message: $logMessage,
+                            subject: $record,
+                            subjectLabel: 'Yayın Akışı'
+                        );
+
+                        SiteCache::forgetHomeHeroPrograms();
+                    }),
             ])
             ->defaultSort('start_time', 'asc')
             ->recordActions([
@@ -312,154 +473,108 @@ class ScheduleCalendarPage extends Page implements HasActions, HasForms, HasTabl
                     ->modalHeading('Yayın Kaydını Düzenle')
                     ->modalSubmitActionLabel('Değişiklikleri Kaydet')
                     ->modalCancelActionLabel('Vazgeç')
-                    ->fillForm(fn (ScheduleTemplateItem $record): array => [
+                    ->fillForm(fn ($record): array => [
                         'program_id' => $record->program_id,
-                        'day_of_week' => (int) $record->day_of_week,
+                        'day_of_week' => (int) ($record->day_of_week ?? $this->selectedDay),
                         'start_time' => $record->start_time ? Carbon::parse($record->start_time)->format('H:i') : null,
                         'end_time' => $record->end_time ? Carbon::parse($record->end_time)->format('H:i') : null,
                         'is_live' => (bool) $record->is_live,
                         'is_repeat' => (bool) $record->is_repeat,
+                        'is_package' => (bool) ($record->is_package ?? false),
                         'is_active' => (bool) $record->is_active,
                         'custom_title' => $record->custom_title,
-                        'image' => $record->image,
-                        'description' => $record->description,
+                        'image' => $record->image ?? null,
+                        'description' => $record->description ?? null,
                         'note' => $record->note,
                     ])
                     ->schema(fn (): array => $this->getScheduleItemFormSchema())
-                    ->action(function (ScheduleTemplateItem $record, array $data, ScheduleCalendarService $service) {
-                        $hasOverlap = $service->checkOverlap(
-                            $record->schedule_template_id,
-                            (int) $data['day_of_week'],
-                            $data['start_time'],
-                            $data['end_time'],
-                            $record->id
-                        );
+                    ->action(function ($record, array $data, ScheduleCalendarService $service) {
+                        $isActive = (bool) ($data['is_active'] ?? true);
 
-                        if ($hasOverlap) {
-                            Notification::make()
-                                ->title('Saat Çakışması Uyarısı!')
-                                ->body('Seçilen gün ve saat aralığında başka bir yayın bulunmaktadır.')
-                                ->warning()
-                                ->send();
+                        if ($isActive && $record instanceof ScheduleTemplateItem) {
+                            $overlaps = $this->getActiveOverlaps(
+                                $record->schedule_template_id,
+                                (int) ($data['day_of_week'] ?? $this->selectedDay),
+                                $data['start_time'],
+                                $data['end_time'],
+                                $record->id
+                            );
+
+                            if ($overlaps->isNotEmpty()) {
+                                $overlapList = $overlaps->map(fn ($item) => [
+                                    'title' => $item->display_title,
+                                    'start_time' => Carbon::parse($item->start_time)->format('H:i'),
+                                    'end_time' => $item->end_time ? Carbon::parse($item->end_time)->format('H:i') : '23:59',
+                                    'status' => 'Aktif',
+                                ])->all();
+
+                                $data['record_id'] = $record->id;
+
+                                $this->mountAction('confirm_overlap', [
+                                    'action_type' => 'edit',
+                                    'submit_label' => 'Yine de Kaydet',
+                                    'form_data' => $data,
+                                    'overlaps' => $overlapList,
+                                ]);
+
+                                return;
+                            }
                         }
 
                         $record->update([
                             'program_id' => $data['program_id'],
-                            'day_of_week' => (int) $data['day_of_week'],
+                            'day_of_week' => (int) ($data['day_of_week'] ?? $this->selectedDay),
                             'start_time' => $data['start_time'],
                             'end_time' => $data['end_time'],
                             'is_live' => (bool) ($data['is_live'] ?? false),
                             'is_repeat' => (bool) ($data['is_repeat'] ?? false),
-                            'is_active' => (bool) ($data['is_active'] ?? true),
+                            'is_package' => (bool) ($data['is_package'] ?? false),
+                            'is_active' => $isActive,
                             'custom_title' => $data['custom_title'] ?? null,
                             'image' => $data['image'] ?? null,
                             'description' => $data['description'] ?? null,
                             'note' => $data['note'] ?? null,
                         ]);
 
-                        if ($record->template && $record->template->status === 'published') {
+                        if ($record instanceof ScheduleTemplateItem && $record->template && $record->template->status === 'published') {
                             $record->template->update(['status' => 'draft']);
                         }
+
+                        AuditLogger::log(
+                            action: 'updated',
+                            message: sprintf('%s %s–%s yayını güncellendi.', $record->display_title, Carbon::parse($record->start_time)->format('H:i'), $record->end_time ? Carbon::parse($record->end_time)->format('H:i') : '23:59'),
+                            subject: $record,
+                            subjectLabel: 'Yayın Akışı'
+                        );
+                        SiteCache::forgetHomeHeroPrograms();
 
                         Notification::make()->title('Yayın kaydı güncellendi.')->success()->send();
                     }),
 
                 ActionGroup::make([
-                    Action::make('copy_item')
-                        ->label('Kopyala')
-                        ->icon(Heroicon::OutlinedDocumentDuplicate)
-                        ->color('info')
-                        ->schema([
-                            Select::make('target_day')
-                                ->label('Kopyalanacak Hedef Gün')
-                                ->options(Schedule::DAYS)
-                                ->default(fn (ScheduleTemplateItem $record) => ($record->day_of_week + 1) % 7)
-                                ->required(),
-
-                            TimePicker::make('start_time')
-                                ->label('Hedef Başlangıç Saati')
-                                ->seconds(false)
-                                ->default(fn (ScheduleTemplateItem $record) => Carbon::parse($record->start_time)->format('H:i'))
-                                ->required(),
-                        ])
-                        ->action(function (ScheduleTemplateItem $record, array $data, ScheduleCalendarService $service) {
-                            $targetDay = (int) $data['target_day'];
-                            $startTime = $data['start_time'];
-
-                            $startCarbon = Carbon::parse($record->start_time);
-                            $endCarbon = $record->end_time ? Carbon::parse($record->end_time) : $startCarbon->copy()->addHour();
-                            $durationMinutes = $startCarbon->diffInMinutes($endCarbon);
-
-                            $newStart = Carbon::parse($startTime);
-                            $newEnd = $newStart->copy()->addMinutes($durationMinutes)->format('H:i');
-
-                            $hasOverlap = $service->checkOverlap(
-                                $record->schedule_template_id,
-                                $targetDay,
-                                $newStart->format('H:i'),
-                                $newEnd
-                            );
-
-                            if ($hasOverlap) {
-                                Notification::make()
-                                    ->title('Saat Çakışması Uyarısı!')
-                                    ->body('Hedef günde belirtilen saat aralığında yayın çakışması tespit edildi.')
-                                    ->warning()
-                                    ->send();
-                            }
-
-                            $newItem = $record->replicate();
-                            $newItem->day_of_week = $targetDay;
-                            $newItem->start_time = $newStart->format('H:i');
-                            $newItem->end_time = $newEnd;
-                            $newItem->save();
-
-                            if ($record->template && $record->template->status === 'published') {
-                                $record->template->update(['status' => 'draft']);
-                            }
-
-                            Notification::make()
-                                ->title('Yayın kaydı ' . Schedule::DAYS[$targetDay] . ' gününe kopyalandı.')
-                                ->success()
-                                ->send();
-                        }),
-
-                    Action::make('move_day')
-                        ->label('Başka Güne Taşı')
-                        ->icon(Heroicon::OutlinedArrowRightOnRectangle)
-                        ->color('warning')
-                        ->schema([
-                            Select::make('target_day')
-                                ->label('Taşınacak Hedef Gün')
-                                ->options(Schedule::DAYS)
-                                ->required(),
-                        ])
-                        ->action(function (ScheduleTemplateItem $record, array $data) {
-                            $targetDay = (int) $data['target_day'];
-                            $record->update(['day_of_week' => $targetDay]);
-
-                            if ($record->template && $record->template->status === 'published') {
-                                $record->template->update(['status' => 'draft']);
-                            }
-
-                            Notification::make()
-                                ->title('Yayın kaydı ' . Schedule::DAYS[$targetDay] . ' gününe taşındı.')
-                                ->success()
-                                ->send();
-                        }),
-
                     DeleteAction::make()
                         ->label('Sil')
                         ->modalHeading('Yayın Kaydını Sil')
                         ->modalDescription('Bu yayın kaydını silmek istediğinizden emin misiniz?')
-                        ->action(function (ScheduleTemplateItem $record) {
-                            $template = $record->template;
-                            $record->delete();
+                        ->action(function ($record) {
+                            if ($record instanceof ScheduleTemplateItem) {
+                                $template = $record->template;
+                                $record->delete();
 
-                            if ($template && $template->status === 'published') {
-                                $template->update(['status' => 'draft']);
+                                if ($template && $template->status === 'published') {
+                                    $template->update(['status' => 'draft']);
+                                }
+                            } else {
+                                $record->delete();
                             }
 
+                            AuditLogger::log(
+                                action: 'deleted',
+                                message: sprintf('%s yayını silindi.', $record->display_title),
+                                subjectLabel: 'Yayın Akışı'
+                            );
+
+                            SiteCache::forgetHomeHeroPrograms();
                             Notification::make()->title('Yayın kaydı silindi.')->success()->send();
                         }),
                 ]),
@@ -471,6 +586,156 @@ class ScheduleCalendarPage extends Page implements HasActions, HasForms, HasTabl
     protected function getHeaderActions(): array
     {
         return [
+            // 0. Overlap Warning Confirmation Modal Action
+            Action::make('confirm_overlap')
+                ->label('Yayın Çakışma Uyarısı')
+                ->color('warning')
+                ->icon(Heroicon::OutlinedExclamationTriangle)
+                ->modalHeading(fn (array $arguments = []): string => match ($arguments['action_type'] ?? '') {
+                    'toggle_active' => 'Aktif Yayın Çakışması Uyarısı',
+                    default => 'Yayın Saat Çakışması Uyarısı',
+                })
+                ->modalDescription(fn (array $arguments = []): string => match ($arguments['action_type'] ?? '') {
+                    'toggle_active' => 'Bu saat aralığında başka bir aktif yayın bulunuyor.',
+                    default => 'Bu saat aralığında başka bir yayın bulunmaktadır.',
+                })
+                ->modalSubmitActionLabel(fn (array $arguments = []): string => $arguments['submit_label'] ?? 'Yine de Kaydet')
+                ->modalCancelActionLabel('İptal')
+                ->schema(function (array $arguments = []): array {
+                    $overlaps = $arguments['overlaps'] ?? [];
+                    $rowsHtml = '';
+                    foreach ($overlaps as $item) {
+                        $rowsHtml .= '<tr style="border-bottom: 1px solid rgba(255,255,255,0.08);">
+                            <td style="padding:8px 12px; font-weight:700; color:#ffffff;">' . e($item['title']) . '</td>
+                            <td style="padding:8px 12px; font-weight:600; color:#fbbf24;">' . e($item['start_time']) . ' – ' . e($item['end_time']) . '</td>
+                            <td style="padding:8px 12px;">
+                                <span style="display:inline-block; padding:2px 8px; border-radius:9999px; background:rgba(52,211,153,0.15); color:#34d399; border:1px solid rgba(52,211,153,0.3); font-size:11px; font-weight:700;">' . e($item['status']) . '</span>
+                            </td>
+                        </tr>';
+                    }
+
+                    return [
+                        \Filament\Forms\Components\Placeholder::make('overlap_preview')
+                            ->label('Çakışan Yayınlar')
+                            ->content(new \Illuminate\Support\HtmlString('
+                                <div style="overflow-x:auto; background:#111827; border:1px solid #1f2937; border-radius:10px; padding:12px;">
+                                    <table style="width:100%; border-collapse:collapse; text-align:left; font-size:13px;">
+                                        <thead>
+                                            <tr style="border-bottom:1px solid #374151; color:#9ca3af; font-size:11px; text-transform:uppercase;">
+                                                <th style="padding:6px 12px;">Program</th>
+                                                <th style="padding:6px 12px;">Saat</th>
+                                                <th style="padding:6px 12px;">Durum</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ' . $rowsHtml . '
+                                        </tbody>
+                                    </table>
+                                </div>
+                            ')),
+                    ];
+                })
+                ->action(function (array $arguments) {
+                    $actionType = $arguments['action_type'] ?? 'create';
+                    $formData = $arguments['form_data'] ?? [];
+
+                    if ($actionType === 'create') {
+                        $templateId = $formData['template_id'];
+                        $item = ScheduleTemplateItem::create([
+                            'schedule_template_id' => $templateId,
+                            'program_id' => $formData['program_id'],
+                            'day_of_week' => (int) $formData['day_of_week'],
+                            'start_time' => $formData['start_time'],
+                            'end_time' => $formData['end_time'],
+                            'custom_title' => $formData['custom_title'] ?? null,
+                            'image' => $formData['image'] ?? null,
+                            'description' => $formData['description'] ?? null,
+                            'is_live' => (bool) ($formData['is_live'] ?? false),
+                            'is_repeat' => (bool) ($formData['is_repeat'] ?? false),
+                            'is_package' => (bool) ($formData['is_package'] ?? false),
+                            'is_active' => (bool) ($formData['is_active'] ?? true),
+                            'note' => $formData['note'] ?? null,
+                        ]);
+
+                        if ($item->template && $item->template->status === 'published') {
+                            $item->template->update(['status' => 'draft']);
+                        }
+
+                        AuditLogger::log(
+                            action: 'created',
+                            message: sprintf(
+                                '%s %s–%s akışa eklendi (Çakışma uyarısına rağmen yayın eklendi).',
+                                $item->display_title,
+                                Carbon::parse($item->start_time)->format('H:i'),
+                                $item->end_time ? Carbon::parse($item->end_time)->format('H:i') : '23:59'
+                            ),
+                            subject: $item,
+                            subjectLabel: 'Yayın Akışı'
+                        );
+
+                        Notification::make()->title('Çakışma uyarısına rağmen yayın eklendi.')->warning()->send();
+                    } elseif ($actionType === 'edit') {
+                        $record = ScheduleTemplateItem::find($formData['record_id'] ?? null);
+                        if ($record) {
+                            $record->update([
+                                'program_id' => $formData['program_id'],
+                                'day_of_week' => (int) ($formData['day_of_week'] ?? $this->selectedDay),
+                                'start_time' => $formData['start_time'],
+                                'end_time' => $formData['end_time'],
+                                'is_live' => (bool) ($formData['is_live'] ?? false),
+                                'is_repeat' => (bool) ($formData['is_repeat'] ?? false),
+                                'is_package' => (bool) ($formData['is_package'] ?? false),
+                                'is_active' => (bool) ($formData['is_active'] ?? true),
+                                'custom_title' => $formData['custom_title'] ?? null,
+                                'image' => $formData['image'] ?? null,
+                                'description' => $formData['description'] ?? null,
+                                'note' => $formData['note'] ?? null,
+                            ]);
+
+                            if ($record->template && $record->template->status === 'published') {
+                                $record->template->update(['status' => 'draft']);
+                            }
+
+                            AuditLogger::log(
+                                action: 'updated',
+                                message: sprintf(
+                                    '%s %s–%s yayını güncellendi (Çakışma uyarısına rağmen yayın güncellendi).',
+                                    $record->display_title,
+                                    Carbon::parse($record->start_time)->format('H:i'),
+                                    $record->end_time ? Carbon::parse($record->end_time)->format('H:i') : '23:59'
+                                ),
+                                subject: $record,
+                                subjectLabel: 'Yayın Akışı'
+                            );
+
+                            Notification::make()->title('Çakışma uyarısına rağmen yayın güncellendi.')->warning()->send();
+                        }
+                    } elseif ($actionType === 'toggle_active') {
+                        $record = ScheduleTemplateItem::find($arguments['record_id'] ?? null);
+                        if ($record) {
+                            $record->update(['is_active' => true]);
+
+                            AuditLogger::log(
+                                action: 'updated',
+                                message: sprintf(
+                                    '%s %s–%s yayını (Çakışma uyarısına rağmen yayın aktif yapıldı).',
+                                    $record->display_title,
+                                    Carbon::parse($record->start_time)->format('H:i'),
+                                    $record->end_time ? Carbon::parse($record->end_time)->format('H:i') : '23:59'
+                                ),
+                                subject: $record,
+                                subjectLabel: 'Yayın Akışı'
+                            );
+
+                            Notification::make()->title('Çakışma uyarısına rağmen yayın aktif yapıldı.')->warning()->send();
+                        }
+                    }
+
+                    $this->resetTable();
+                    SiteCache::forgetHomeHeroPrograms();
+                    SiteCache::forgetMenu('header_primary');
+                }),
+
             // 1. Taslağı Yayınla Action
             Action::make('publish_template')
                 ->label('Taslağı Yayınla')
@@ -691,24 +956,33 @@ class ScheduleCalendarPage extends Page implements HasActions, HasForms, HasTabl
                         return;
                     }
 
-                    $hasOverlap = $service->checkOverlap(
-                        $template->id,
-                        (int) $data['day_of_week'],
-                        $data['start_time'],
-                        $data['end_time']
-                    );
+                    $isActive = (bool) ($data['is_active'] ?? true);
 
-                    if ($hasOverlap) {
-                        Notification::make()
-                            ->title('Saat Çakışması Uyarısı!')
-                            ->body('Seçilen gün ve saat aralığında başka bir yayın bulunmaktadır. Yayın eklenemedi.')
-                            ->danger()
-                            ->send();
+                    if ($isActive) {
+                        $overlaps = $this->getActiveOverlaps($template->id, (int) $data['day_of_week'], $data['start_time'], $data['end_time']);
 
-                        return;
+                        if ($overlaps->isNotEmpty()) {
+                            $overlapList = $overlaps->map(fn ($item) => [
+                                'title' => $item->display_title,
+                                'start_time' => Carbon::parse($item->start_time)->format('H:i'),
+                                'end_time' => $item->end_time ? Carbon::parse($item->end_time)->format('H:i') : '23:59',
+                                'status' => 'Aktif',
+                            ])->all();
+
+                            $data['template_id'] = $template->id;
+
+                            $this->mountAction('confirm_overlap', [
+                                'action_type' => 'create',
+                                'submit_label' => 'Yine de Ekle',
+                                'form_data' => $data,
+                                'overlaps' => $overlapList,
+                            ]);
+
+                            return;
+                        }
                     }
 
-                    ScheduleTemplateItem::create([
+                    $item = ScheduleTemplateItem::create([
                         'schedule_template_id' => $template->id,
                         'program_id' => $data['program_id'],
                         'day_of_week' => (int) $data['day_of_week'],
@@ -719,13 +993,22 @@ class ScheduleCalendarPage extends Page implements HasActions, HasForms, HasTabl
                         'description' => $data['description'] ?? null,
                         'is_live' => (bool) ($data['is_live'] ?? false),
                         'is_repeat' => (bool) ($data['is_repeat'] ?? false),
-                        'is_active' => (bool) ($data['is_active'] ?? true),
+                        'is_package' => (bool) ($data['is_package'] ?? false),
+                        'is_active' => $isActive,
                         'note' => $data['note'] ?? null,
                     ]);
 
                     if ($template->status === 'published') {
                         $template->update(['status' => 'draft']);
                     }
+
+                    AuditLogger::log(
+                        action: 'created',
+                        message: sprintf('%s %s–%s akışa eklendi.', $item->display_title, Carbon::parse($item->start_time)->format('H:i'), $item->end_time ? Carbon::parse($item->end_time)->format('H:i') : '23:59'),
+                        subject: $item,
+                        subjectLabel: 'Yayın Akışı'
+                    );
+                    SiteCache::forgetHomeHeroPrograms();
 
                     $this->resetTable();
 
@@ -735,8 +1018,37 @@ class ScheduleCalendarPage extends Page implements HasActions, HasForms, HasTabl
                         ->send();
                 }),
 
-            // 4. Toplu İşlemler Grubu
+            // 4. Toplu İşlemler Grubu (Üç Nokta Menüsü)
             ActionGroup::make([
+                Action::make('export_excel')
+                    ->label('Excel\'e Aktar')
+                    ->color('emerald')
+                    ->icon(Heroicon::OutlinedArrowDownTray)
+                    ->modalHeading('Yayın Akışını Excel\'e Aktar')
+                    ->modalDescription(fn (): string => sprintf(
+                        'Seçili yayın akışı ("%s") iki çalışma sayfası (Haftalık Görünüm & Detaylı Liste) halinde Excel dosyası olarak indirilecektir.',
+                        $this->selectedTemplate?->name ?? 'Seçili Akış'
+                    ))
+                    ->modalSubmitActionLabel('Excel Dosyasını İndir')
+                    ->modalCancelActionLabel('Vazgeç')
+                    ->schema([
+                        Toggle::make('include_passive')
+                            ->label('Pasif Yayınları da Dahil Et')
+                            ->default(false)
+                            ->helperText('Açık tutulursa akışta gizli olan pasif yayınlar da Excel\'e eklenir.'),
+                    ])
+                    ->action(function (array $data, ScheduleExcelExportService $exportService) {
+                        $template = $this->selectedTemplate;
+                        if (! $template) {
+                            Notification::make()->title('Lütfen önce bir şablon seçiniz.')->danger()->send();
+                            return;
+                        }
+
+                        $includePassive = (bool) ($data['include_passive'] ?? false);
+
+                        return $exportService->exportTemplateToExcel($template, $includePassive);
+                    }),
+
                 Action::make('duplicate_template')
                     ->label('Gelecek Sezona Kopyala')
                     ->icon(Heroicon::OutlinedDocumentDuplicate)
@@ -884,10 +1196,17 @@ class ScheduleCalendarPage extends Page implements HasActions, HasForms, HasTabl
 
             Section::make('Yayın Bilgisi')
                 ->schema([
-                    Grid::make(3)->schema([
+                    Grid::make(4)->schema([
                         Toggle::make('is_live')->label('Canlı Yayın')->default(false),
                         Toggle::make('is_repeat')->label('Tekrar Yayın')->default(false),
-                        Toggle::make('is_active')->label('Aktif')->default(true),
+                        Toggle::make('is_package')
+                            ->label('Paket Yayın')
+                            ->default(false)
+                            ->helperText('Önceden hazırlanmış/banttan yayınlanan paket içerik.'),
+                        Toggle::make('is_active')
+                            ->label('Akışta Görünür')
+                            ->default(true)
+                            ->helperText('Kapattığınızda yayın kaydı silinmez; public yayın akışında gösterilmez ve bu saat aralığı yeni aktif yayın için boş kabul edilir.'),
                     ]),
                 ]),
 

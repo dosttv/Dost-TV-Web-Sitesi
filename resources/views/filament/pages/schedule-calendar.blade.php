@@ -267,6 +267,51 @@
                 @endif
             </div>
 
+            {{-- ÖZEL YAYIN / İSTİSNA BİLGİ BANNER'I --}}
+            @php
+                $dayException = $this->exceptionForSelectedDay;
+            @endphp
+            @if($dayException)
+                <div class="rounded-xl border border-purple-500/30 bg-purple-950/40 p-4 shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div class="flex items-center gap-3">
+                        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-purple-500/20 text-purple-400 border border-purple-500/30">
+                            ⚡
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="text-xs font-bold uppercase tracking-wider text-purple-400">Bu gün için özel yayın akışı kullanıyor</span>
+                                <span class="inline-flex items-center rounded-full bg-purple-500/20 px-2 py-0.5 text-[10px] font-semibold text-purple-300 border border-purple-500/30">
+                                    {{ $dayException->override_type === 'replace_all' ? 'Tüm Akış Değiştirildi' : 'Mevcut Akışa Eklendi' }}
+                                </span>
+                                <span class="inline-flex items-center rounded-full {{ $this->showExceptionItems ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border-amber-500/30' }} px-2 py-0.5 text-[10px] font-semibold border">
+                                    {{ $this->showExceptionItems ? 'Gösterilen: Özel Yayın Akışı' : 'Gösterilen: Normal Şablon Akışı' }}
+                                </span>
+                            </div>
+                            <p class="text-xs text-purple-200/80 mt-0.5">
+                                {{ $dayException->name }} — Ziyaretçiler public sitede bu tarihte ({{ \Illuminate\Support\Carbon::parse($dayException->exception_date)->format('d.m.Y') }}) özel yayın akışını görecektir.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0 flex-wrap">
+                        <button 
+                            type="button" 
+                            wire:click="toggleExceptionView" 
+                            class="inline-flex items-center gap-1.5 rounded-lg border border-purple-500/40 bg-purple-500/20 px-3 py-1.5 text-xs font-bold text-purple-200 hover:bg-purple-500/30 transition cursor-pointer"
+                        >
+                            <span>{{ $this->showExceptionItems ? 'Normal Akışı Gör' : 'Özel Akışı Düzenle' }}</span>
+                        </button>
+                        <button 
+                            type="button" 
+                            wire:click="removeSelectedDayException({{ $dayException->id }})" 
+                            wire:confirm="Bu tarihteki özel yayın akışını kaldırmak ve normal haftalık şablona dönmek istediğinizden emin misiniz?"
+                            class="inline-flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-bold text-red-400 hover:bg-red-500/20 transition cursor-pointer"
+                        >
+                            <span>Özel Akışı Kaldır (Normal Akışa Dön)</span>
+                        </button>
+                    </div>
+                </div>
+            @endif
+
             {{-- 2. YATAY 7 GÜN KARTLARI GRİDİ (DESKTOP: 7 EŞİT SÜTUN) --}}
             <div class="schedule-day-grid">
                 @foreach ($days as $idx => $d)

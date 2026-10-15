@@ -64,8 +64,16 @@ class SchedulesTable
                     ->trueColor('warning')
                     ->falseColor('gray'),
 
+                IconColumn::make('is_package')
+                    ->label('Paket')
+                    ->boolean()
+                    ->trueIcon(Heroicon::OutlinedArchiveBox)
+                    ->falseIcon(Heroicon::OutlinedMinus)
+                    ->trueColor('info')
+                    ->falseColor('gray'),
+
                 ToggleColumn::make('is_active')
-                    ->label('Aktif'),
+                    ->label('Akışta Görünür'),
 
                 TextColumn::make('note')
                     ->label('Not')
@@ -88,6 +96,9 @@ class SchedulesTable
 
                 TernaryFilter::make('is_repeat')
                     ->label('Tekrar Yayın'),
+
+                TernaryFilter::make('is_package')
+                    ->label('Paket Yayın'),
 
                 TernaryFilter::make('is_active')
                     ->label('Aktiflik Durumu'),

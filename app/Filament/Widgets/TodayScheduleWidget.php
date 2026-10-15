@@ -72,6 +72,7 @@ class TodayScheduleWidget extends Widget
                 'display_title' => $item->display_title,
                 'is_live' => (bool) ($item->is_live ?? false),
                 'is_repeat' => (bool) ($item->is_repeat ?? false),
+                'is_package' => (bool) ($item->is_package ?? false),
                 'status_key' => $statusKey,
                 'status_label' => $statusLabel,
             ];

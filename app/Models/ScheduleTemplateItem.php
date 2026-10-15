@@ -20,6 +20,7 @@ class ScheduleTemplateItem extends Model
         'custom_title',
         'is_live',
         'is_repeat',
+        'is_package',
         'is_active',
         'note',
         'image',
@@ -34,6 +35,7 @@ class ScheduleTemplateItem extends Model
         'day_of_week' => 'integer',
         'is_live' => 'boolean',
         'is_repeat' => 'boolean',
+        'is_package' => 'boolean',
         'is_active' => 'boolean',
     ];
 
@@ -65,15 +67,23 @@ class ScheduleTemplateItem extends Model
     public function getEffectiveImageAttribute(): string
     {
         if (filled($this->image)) {
-            return Storage::disk('public')->url($this->image);
+            return (str_starts_with($this->image, 'http://') || str_starts_with($this->image, 'https://'))
+                ? $this->image
+                : Storage::disk('public')->url($this->image);
         }
 
         if ($this->episode && filled($this->episode->cover_image ?? null)) {
-            return Storage::disk('public')->url($this->episode->cover_image);
+            $epImage = $this->episode->cover_image;
+            return (str_starts_with($epImage, 'http://') || str_starts_with($epImage, 'https://'))
+                ? $epImage
+                : Storage::disk('public')->url($epImage);
         }
 
         if ($this->program && filled($this->program->cover_image ?? null)) {
-            return Storage::disk('public')->url($this->program->cover_image);
+            $progImage = $this->program->cover_image;
+            return (str_starts_with($progImage, 'http://') || str_starts_with($progImage, 'https://'))
+                ? $progImage
+                : Storage::disk('public')->url($progImage);
         }
 
         return 'https://dosttv.com/wp-content/uploads/2022/02/dost_logo.png';
