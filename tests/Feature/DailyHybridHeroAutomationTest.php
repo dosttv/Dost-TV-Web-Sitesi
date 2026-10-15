@@ -236,4 +236,195 @@ class DailyHybridHeroAutomationTest extends TestCase
         $view->assertSee('Ç');
         $view->assertSee('C');
     }
+
+    public function test_hero_switches_when_active_period_changes_and_invalidates_cache(): void
+    {
+        Carbon::setTestNow('2026-10-15 10:00:00'); // Thursday (ISO day 3)
+
+        $programA = Program::create([
+            'name' => 'Live Period A Show',
+            'slug' => 'live-period-a',
+            'is_active' => true,
+            'show_on_public' => true,
+            'is_featured' => false,
+        ]);
+
+        $programB = Program::create([
+            'name' => 'Live Period B Show',
+            'slug' => 'live-period-b',
+            'is_active' => true,
+            'show_on_public' => true,
+            'is_featured' => false,
+        ]);
+
+        // Template A is active
+        $templateA = ScheduleTemplate::create([
+            'name' => 'Yaz Akışı A',
+            'is_active' => true,
+            'status' => 'published',
+            'valid_from' => '2026-06-01',
+            'valid_until' => '2026-12-31',
+        ]);
+
+        ScheduleTemplateItem::create([
+            'schedule_template_id' => $templateA->id,
+            'day_of_week' => 3, // Thursday
+            'start_time' => '10:00:00',
+            'end_time' => '11:00:00',
+            'program_id' => $programA->id,
+            'is_live' => true,
+            'is_active' => true,
+        ]);
+
+        // Template B is published but not active yet
+        $templateB = ScheduleTemplate::create([
+            'name' => 'Sonbahar Akışı B',
+            'is_active' => false,
+            'status' => 'published',
+            'valid_from' => '2026-09-01',
+            'valid_until' => '2026-12-31',
+        ]);
+
+        ScheduleTemplateItem::create([
+            'schedule_template_id' => $templateB->id,
+            'day_of_week' => 3, // Thursday
+            'start_time' => '10:00:00',
+            'end_time' => '11:00:00',
+            'program_id' => $programB->id,
+            'is_live' => true,
+            'is_active' => true,
+        ]);
+
+        SiteCache::forgetHomeHeroPrograms();
+
+        $service = app(HomepageDataService::class);
+        $heroInitial = $service->resolveHeroPrograms();
+
+        // Scenario A: Period A's live program is shown
+        $this->assertTrue($heroInitial->contains('slug', 'live-period-a'));
+        $this->assertFalse($heroInitial->contains('slug', 'live-period-b'));
+
+        // Scenario B, C & G: Period B is activated via common service
+        app(\App\Services\Schedule\ScheduleCalendarService::class)->activateTemplate($templateB);
+
+        $this->assertFalse($templateA->fresh()->is_active);
+        $this->assertTrue($templateB->fresh()->is_active);
+
+        // Without manual forget, service must return Period B immediately (cache was invalidated)
+        $heroAfter = $service->resolveHeroPrograms();
+        $this->assertTrue($heroAfter->contains('slug', 'live-period-b'));
+        $this->assertFalse($heroAfter->contains('slug', 'live-period-a'));
+
+        Carbon::setTestNow();
+    }
+
+    public function test_manual_hero_inclusion_exclusion_hero_days_and_sort_order(): void
+    {
+        Carbon::setTestNow('2026-10-15 10:00:00'); // Thursday
+
+        $prog1 = Program::create([
+            'name' => 'Manual Show 1',
+            'slug' => 'manual-show-1',
+            'is_active' => true,
+            'show_on_public' => true,
+            'is_featured' => true,
+            'hero_days' => ['thursday'],
+            'sort_order' => 10,
+        ]);
+
+        $prog2 = Program::create([
+            'name' => 'Manual Show 2',
+            'slug' => 'manual-show-2',
+            'is_active' => true,
+            'show_on_public' => true,
+            'is_featured' => true,
+            'hero_days' => ['thursday'],
+            'sort_order' => 2,
+        ]);
+
+        SiteCache::forgetHomeHeroPrograms();
+        $service = app(HomepageDataService::class);
+        $hero = $service->resolveHeroPrograms();
+
+        // Scenario D: Programs appear on appropriate day
+        $this->assertTrue($hero->contains('slug', 'manual-show-1'));
+        $this->assertTrue($hero->contains('slug', 'manual-show-2'));
+
+        // Scenario F: sort_order determines sequence (prog2 before prog1)
+        $prog2Index = $hero->search(fn ($p) => $p->slug === 'manual-show-2');
+        $prog1Index = $hero->search(fn ($p) => $p->slug === 'manual-show-1');
+        $this->assertLessThan($prog1Index, $prog2Index);
+
+        // Scenario E: When excluded from manual hero, disappears from Hero
+        $prog1->update(['is_featured' => false]);
+        $heroUpdated = $service->resolveHeroPrograms();
+        $this->assertFalse($heroUpdated->contains('slug', 'manual-show-1'));
+
+        Carbon::setTestNow();
+    }
+
+    public function test_deduplication_and_passive_item_exclusion(): void
+    {
+        Carbon::setTestNow('2026-10-15 10:00:00'); // Thursday
+
+        $program = Program::create([
+            'name' => 'Dual Candidate Show',
+            'slug' => 'dual-candidate',
+            'is_active' => true,
+            'show_on_public' => true,
+            'is_featured' => true,
+            'hero_days' => ['thursday'],
+            'sort_order' => 99,
+        ]);
+
+        $passiveLiveProgram = Program::create([
+            'name' => 'Passive Live Show',
+            'slug' => 'passive-live-show',
+            'is_active' => true,
+            'show_on_public' => true,
+            'is_featured' => false,
+        ]);
+
+        $template = ScheduleTemplate::create([
+            'name' => 'Dedupe Template',
+            'is_active' => true,
+            'status' => 'published',
+            'valid_from' => '2026-01-01',
+        ]);
+
+        // Dual candidate is live in schedule
+        ScheduleTemplateItem::create([
+            'schedule_template_id' => $template->id,
+            'day_of_week' => 3,
+            'start_time' => '10:00:00',
+            'end_time' => '11:00:00',
+            'program_id' => $program->id,
+            'is_live' => true,
+            'is_active' => true,
+        ]);
+
+        // Passive item is marked live, but is_active = false
+        ScheduleTemplateItem::create([
+            'schedule_template_id' => $template->id,
+            'day_of_week' => 3,
+            'start_time' => '12:00:00',
+            'end_time' => '13:00:00',
+            'program_id' => $passiveLiveProgram->id,
+            'is_live' => true,
+            'is_active' => false,
+        ]);
+
+        SiteCache::forgetHomeHeroPrograms();
+        $service = app(HomepageDataService::class);
+        $hero = $service->resolveHeroPrograms();
+
+        // Scenario I: Appears exactly once (deduplicated)
+        $this->assertEquals(1, $hero->where('slug', 'dual-candidate')->count());
+
+        // Scenario J: Passive live item does NOT appear in Hero
+        $this->assertFalse($hero->contains('slug', 'passive-live-show'));
+
+        Carbon::setTestNow();
+    }
 }
+

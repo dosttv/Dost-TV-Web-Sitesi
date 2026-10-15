@@ -736,6 +736,61 @@ class ScheduleCalendarPage extends Page implements HasActions, HasForms, HasTabl
                     SiteCache::forgetMenu('header_primary');
                 }),
 
+            // 0.5. Bu Dönemi Gösterime Al Action
+            Action::make('activate_current_template')
+                ->label('Bu Dönemi Gösterime Al')
+                ->icon(Heroicon::OutlinedCheckCircle)
+                ->color('success')
+                ->requiresConfirmation()
+                ->modalHeading(fn (): string => sprintf('"%s" Dönemini Gösterime Al', $this->selectedTemplate?->name ?? 'Yayın Akışı'))
+                ->modalDescription(function (): \Illuminate\Support\HtmlString {
+                    $template = $this->selectedTemplate;
+                    if (! $template) {
+                        return new \Illuminate\Support\HtmlString('Lütfen bir dönem seçiniz.');
+                    }
+
+                    $warnings = [];
+
+                    if ($template->items()->count() === 0) {
+                        $warnings[] = '<div class="p-2.5 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 font-semibold text-xs mb-2">⚠️ DİKKAT: Bu dönemde henüz hiçbir yayın akışı kaydı (öğe) bulunmamaktadır! Gösterime alırsanız kamuya açık sitede yayın akışı ve Hero canlı programları boş görünecektir.</div>';
+                    }
+
+                    $todayStr = now()->toDateString();
+                    if ($template->valid_from && $template->valid_from->toDateString() > $todayStr) {
+                        $warnings[] = '<div class="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs mb-2">⚠️ Bu dönemin başlangıç tarihi (' . $template->valid_from->format('d.m.Y') . ') henüz gelmemiştir.</div>';
+                    } elseif ($template->valid_until && $template->valid_until->toDateString() < $todayStr) {
+                        $warnings[] = '<div class="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs mb-2">⚠️ Bu dönemin bitiş tarihi (' . $template->valid_until->format('d.m.Y') . ') geçmiştir.</div>';
+                    }
+
+                    $activeTemplate = ScheduleTemplate::where('is_active', true)->where('id', '!=', $template->id)->first();
+                    if ($activeTemplate) {
+                        $warnings[] = '<div class="text-xs text-slate-300">Şu anda gösterimde olan <strong>' . e($activeTemplate->name) . '</strong> dönemi pasife alınacak ve <strong>' . e($template->name) . '</strong> dönemi kamuya açık sitede gösterime geçecektir.</div>';
+                    } else {
+                        $warnings[] = '<div class="text-xs text-slate-300">Bu yayın dönemini kamuya açık sitede gösterime almak istediğinize emin misiniz?</div>';
+                    }
+
+                    return new \Illuminate\Support\HtmlString(implode('', $warnings));
+                })
+                ->modalSubmitActionLabel('Evet, Gösterime Al')
+                ->modalCancelActionLabel('Vazgeç')
+                ->action(function (ScheduleCalendarService $service) {
+                    $template = $this->selectedTemplate;
+                    if (! $template) {
+                        Notification::make()->title('Lütfen önce bir dönem seçiniz.')->danger()->send();
+                        return;
+                    }
+
+                    $service->activateTemplate($template);
+
+                    Notification::make()
+                        ->title('Yayın dönemi kamuya açık sitede gösterime alındı.')
+                        ->body("\"{$template->name}\" artık yayında ve ana sayfa Hero canlı programları bu akıştan besleniyor.")
+                        ->success()
+                        ->send();
+
+                    $this->resetTable();
+                }),
+
             // 1. Taslağı Yayınla Action
             Action::make('publish_template')
                 ->label('Taslağı Yayınla')

@@ -85,6 +85,16 @@ class ScheduleTemplate extends Model
                 static::where('id', '!=', $template->id ?? 0)->where('is_active', true)->update(['is_active' => false]);
             }
         });
+
+        static::saved(function () {
+            \App\Support\SiteCache::forgetHomeHeroPrograms();
+            \App\Support\SiteCache::forgetHomepage();
+        });
+
+        static::deleted(function () {
+            \App\Support\SiteCache::forgetHomeHeroPrograms();
+            \App\Support\SiteCache::forgetHomepage();
+        });
     }
 
     public function items(): HasMany

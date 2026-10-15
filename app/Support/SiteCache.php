@@ -82,7 +82,7 @@ class SiteCache
         Cache::forget(self::HOMEPAGE_SECTIONS_KEY);
         Cache::forget(self::HOME_BANNERS_KEY);
         Cache::forget(self::HOME_FEATURED_PROGRAMS_KEY);
-        Cache::forget(self::HOME_HERO_PROGRAMS_KEY);
+        self::forgetHomeHeroPrograms();
     }
 
     public static function rememberHomeBanners(Closure $callback): mixed
@@ -113,8 +113,10 @@ class SiteCache
 
     public static function forgetHomeHeroPrograms(): void
     {
-        $dateKey = now()->format('Y-m-d');
-        Cache::forget(self::HOME_HERO_PROGRAMS_KEY.':'.$dateKey);
+        $baseDate = now();
+        for ($i = -2; $i <= 7; $i++) {
+            Cache::forget(self::HOME_HERO_PROGRAMS_KEY.':'.$baseDate->copy()->addDays($i)->format('Y-m-d'));
+        }
         Cache::forget(self::HOME_HERO_PROGRAMS_KEY);
     }
 

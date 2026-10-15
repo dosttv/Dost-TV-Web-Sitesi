@@ -260,10 +260,35 @@
                 </div>
 
                 @if($currentTemplate)
-                    <span class="schedule-badge {{ $currentTemplate->is_active ? 'is-active' : ($currentTemplate->status === 'published' ? 'is-published' : 'is-draft') }}">
-                        <span class="schedule-dot"></span>
-                        <span>{{ $currentTemplate->is_active ? 'Gösterimde' : ($currentTemplate->status === 'published' ? 'Yayında' : 'Taslak') }}</span>
-                    </span>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        @if($currentTemplate->is_active)
+                            <span class="schedule-badge is-active">
+                                <span class="schedule-dot"></span>
+                                <span>Gösterimde</span>
+                            </span>
+                        @else
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/30">
+                                <span>⚠️</span>
+                                <span>Bu dönem şu anda gösterimde değil.</span>
+                            </span>
+
+                            <button 
+                                type="button" 
+                                wire:click="mountAction('activate_current_template')" 
+                                class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 px-3 py-1 text-xs font-bold text-white shadow transition cursor-pointer"
+                            >
+                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                                </svg>
+                                <span>Bu Dönemi Gösterime Al</span>
+                            </button>
+
+                            <span class="schedule-badge {{ $currentTemplate->status === 'published' ? 'is-published' : 'is-draft' }}">
+                                <span class="schedule-dot"></span>
+                                <span>{{ $currentTemplate->status === 'published' ? 'Yayında' : 'Taslak' }}</span>
+                            </span>
+                        @endif
+                    </div>
                 @endif
             </div>
 

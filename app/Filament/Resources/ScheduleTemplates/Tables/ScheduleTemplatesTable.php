@@ -98,6 +98,9 @@ class ScheduleTemplatesTable
                             'is_active' => false,
                         ]);
 
+                        \App\Support\SiteCache::forgetHomeHeroPrograms();
+                        \App\Support\SiteCache::forgetHomepage();
+
                         Notification::make()
                             ->title('Yayın dönemi hazır duruma getirildi.')
                             ->success()
@@ -121,24 +124,7 @@ class ScheduleTemplatesTable
                         return 'Bu yayın dönemini gösterime almak istediğinize emin misiniz?';
                     })
                     ->action(function (ScheduleTemplate $record) {
-                        DB::transaction(function () use ($record) {
-                            ScheduleTemplate::query()
-                                ->whereKeyNot($record->getKey())
-                                ->update(['is_active' => false]);
-
-                            $record->update([
-                                'status' => 'published',
-                                'is_active' => true,
-                            ]);
-                        });
-
-                        $userName = auth()->user()?->name ?? 'Kullanıcı';
-                        \App\Services\Audit\AuditLogger::log(
-                            action: 'activated',
-                            message: "{$userName}, {$record->name} dönemini aktifleştirdi.",
-                            subject: $record,
-                            subjectLabel: $record->name,
-                        );
+                        app(\App\Services\Schedule\ScheduleCalendarService::class)->activateTemplate($record);
 
                         Notification::make()
                             ->title('Yayın dönemi gösterime alındı.')

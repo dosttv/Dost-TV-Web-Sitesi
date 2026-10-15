@@ -411,4 +411,20 @@ class ScheduleCalendarTest extends TestCase
         $response->assertSee('Paket Program');
         $response->assertSee('PAKET');
     }
+
+    public function test_activate_current_template_action_activates_selected_template(): void
+    {
+        $user = User::factory()->create(['role' => 'administrator']);
+        $templateA = ScheduleTemplate::create(['name' => 'Akış A', 'slug' => 'akis-a', 'status' => 'published', 'is_active' => true]);
+        $templateB = ScheduleTemplate::create(['name' => 'Akış B', 'slug' => 'akis-b', 'status' => 'published', 'is_active' => false]);
+
+        Livewire::actingAs($user)
+            ->test(ScheduleCalendarPage::class, ['selectedTemplateId' => $templateB->id])
+            ->callAction('activate_current_template')
+            ->assertHasNoActionErrors();
+
+        $this->assertFalse($templateA->fresh()->is_active);
+        $this->assertTrue($templateB->fresh()->is_active);
+    }
 }
+

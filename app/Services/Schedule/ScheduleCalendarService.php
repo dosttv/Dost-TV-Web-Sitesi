@@ -9,6 +9,7 @@ use App\Models\ScheduleVersionHistory;
 use App\Support\SiteCache;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class ScheduleCalendarService
 {
@@ -237,4 +238,31 @@ class ScheduleCalendarService
         SiteCache::forgetMenu('header_primary');
         SiteCache::forgetHomeHeroPrograms();
     }
+
+    public function activateTemplate(ScheduleTemplate $template, ?string $userName = null): void
+    {
+        DB::transaction(function () use ($template) {
+            ScheduleTemplate::query()
+                ->whereKeyNot($template->getKey())
+                ->update(['is_active' => false]);
+
+            $template->update([
+                'status' => 'published',
+                'is_active' => true,
+            ]);
+        });
+
+        $user = $userName ?? (auth()->user()?->name ?? 'Kullanıcı');
+        \App\Services\Audit\AuditLogger::log(
+            action: 'activated',
+            message: "{$user}, {$template->name} dönemini gösterime aldı.",
+            subject: $template,
+            subjectLabel: $template->name,
+        );
+
+        // Explicit cache invalidation after transaction committed
+        SiteCache::forgetHomeHeroPrograms();
+        SiteCache::forgetHomepage();
+    }
 }
+

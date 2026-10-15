@@ -536,7 +536,7 @@ class HomepageDataService
             $livePrograms = collect();
 
             foreach ($todaySchedule as $item) {
-                if (empty($item->is_live)) {
+                if (empty($item->is_live) || empty($item->is_active)) {
                     continue;
                 }
 
@@ -546,12 +546,16 @@ class HomepageDataService
                 }
             }
 
-            // 2. Bugüne özel manuel öne çıkan programlar (sort_order sırasıyla)
+            $livePrograms = $livePrograms->unique('id')->values();
+            $liveProgramIds = $livePrograms->pluck('id')->all();
+
+            // 2. Bugüne özel manuel öne çıkan programlar (Hero Sırası / sort_order sırasıyla)
             $manualPrograms = Program::query()
                 ->where('show_on_public', true)
                 ->where('is_active', true)
                 ->where('is_featured', true)
                 ->orderBy('sort_order')
+                ->orderBy('id')
                 ->get()
                 ->filter(function (Program $program) use ($todayDayKey) {
                     if (empty($program->hero_days)) {
@@ -560,10 +564,11 @@ class HomepageDataService
 
                     return in_array($todayDayKey, (array) $program->hero_days, true);
                 })
+                ->reject(fn (Program $p) => in_array($p->id, $liveProgramIds, true))
                 ->values();
 
-            // 3. Otomatik canlılar önce + Manuel programlar sonra, benzersiz program ID
-            return $livePrograms->concat($manualPrograms)->unique('id')->values();
+            // 3. Otomatik canlılar önce + Manuel programlar sonra, tekil program ID
+            return $livePrograms->concat($manualPrograms)->values();
         });
     }
 

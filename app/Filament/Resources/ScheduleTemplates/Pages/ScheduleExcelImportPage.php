@@ -252,6 +252,9 @@ class ScheduleExcelImportPage extends Page implements HasForms
         $this->isImported = true;
         $this->isPreviewLoaded = false;
 
+        \App\Support\SiteCache::forgetHomeHeroPrograms();
+        \App\Support\SiteCache::forgetHomepage();
+
         $userName = auth()->user()?->name ?? 'Kullanıcı';
         \App\Services\Audit\AuditLogger::log(
             action: 'imported',
