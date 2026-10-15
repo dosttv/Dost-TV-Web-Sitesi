@@ -11,6 +11,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Forms\Get;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
@@ -59,7 +60,8 @@ class ProgramForm
                                     Toggle::make('is_featured')
                                         ->label("Hero'da Göster")
                                         ->helperText("Açık olduğunda program, aktif ve public olduğu sürece ana sayfa Hero slider'ında gösterilir.")
-                                        ->default(false),
+                                        ->default(false)
+                                        ->live(),
 
                                     TextInput::make('sort_order')
                                         ->label('Hero Sırası')
@@ -81,7 +83,17 @@ class ProgramForm
                                         'sunday' => 'Pazar',
                                     ])
                                     ->columns(4)
-                                    ->helperText("Seçilen günlerde program manuel olarak Hero'ya eklenir. Hiçbir gün seçilmezse 'Hero'da Göster' açık olduğu sürece her gün gösterilir. Bugünün canlı programları bu ayardan bağımsız olarak otomatik Hero'ya gelir.")
+                                    ->live()
+                                    ->helperText("Programın manuel olarak Hero'da görünmesini istediğiniz günleri seçin. Hiçbir gün seçilmezse program manuel Hero'da gösterilmez. Bugünün canlı yayınları bu ayardan bağımsız olarak otomatik gösterilir.")
+                                    ->hint(function ($get) {
+                                        if ((bool) $get('is_featured') && empty($get('hero_days'))) {
+                                            return "Hero'da Göster açık ancak henüz bir gün seçilmedi. Program manuel Hero'da görünmeyecek.";
+                                        }
+
+                                        return null;
+                                    })
+                                    ->hintIcon('heroicon-m-exclamation-triangle')
+                                    ->hintColor('warning')
                                     ->columnSpanFull(),
 
                                 Textarea::make('description')

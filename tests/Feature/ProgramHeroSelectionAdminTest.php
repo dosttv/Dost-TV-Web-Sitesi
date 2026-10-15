@@ -28,13 +28,15 @@ class ProgramHeroSelectionAdminTest extends TestCase
 
     public function test_program_hero_selection_and_ordering_acceptance_flow(): void
     {
-        // 1. Create Program A and Program B
+        $todayKey = strtolower(now()->format('l'));
+
         $programA = Program::create([
             'name' => 'Program A',
             'slug' => 'program-a',
             'status' => 'active',
             'show_on_public' => true,
             'is_featured' => true,
+            'hero_days' => [$todayKey],
             'sort_order' => 0,
         ]);
 
@@ -44,6 +46,7 @@ class ProgramHeroSelectionAdminTest extends TestCase
             'status' => 'active',
             'show_on_public' => true,
             'is_featured' => true,
+            'hero_days' => [$todayKey],
             'sort_order' => 1,
         ]);
 

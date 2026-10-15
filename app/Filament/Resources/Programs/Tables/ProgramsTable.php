@@ -90,14 +90,14 @@ class ProgramsTable
                 TextColumn::make('hero_days')
                     ->label('Hero Günleri')
                     ->badge()
-                    ->color(fn ($state, Program $record) => ! $record->is_featured ? 'gray' : (empty($state) ? 'success' : 'info'))
+                    ->color(fn ($state, Program $record) => ! $record->is_featured ? 'gray' : (empty($state) ? 'warning' : 'info'))
                     ->formatStateUsing(function ($state, Program $record) {
                         if (! $record->is_featured) {
                             return 'Kapalı';
                         }
 
                         if (empty($state)) {
-                            return 'Her Gün';
+                            return 'Gün Seçilmedi';
                         }
 
                         $dayLabels = [

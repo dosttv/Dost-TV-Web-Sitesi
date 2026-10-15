@@ -550,6 +550,7 @@ class HomepageDataService
             $liveProgramIds = $livePrograms->pluck('id')->all();
 
             // 2. Bugüne özel manuel öne çıkan programlar (Hero Sırası / sort_order sırasıyla)
+            // hero_days boş veya null ise hiçbir gün gösterilmez; bugünün günü özellikle seçilmiş olmalıdır.
             $manualPrograms = Program::query()
                 ->where('show_on_public', true)
                 ->where('is_active', true)
@@ -559,7 +560,7 @@ class HomepageDataService
                 ->get()
                 ->filter(function (Program $program) use ($todayDayKey) {
                     if (empty($program->hero_days)) {
-                        return true; // hero_days null/boş ise geriye uyumluluk: her gün manuel hero adayı
+                        return false; // hero_days boş ise hiçbir gün manuel hero'ya girmez
                     }
 
                     return in_array($todayDayKey, (array) $program->hero_days, true);

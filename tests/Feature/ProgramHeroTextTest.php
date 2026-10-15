@@ -49,6 +49,7 @@ class ProgramHeroTextTest extends TestCase
             'description' => 'Genel Program Tanıtım Açıklaması Detayı',
             'is_active' => true,
             'is_featured' => true,
+            'hero_days' => [strtolower(now()->format('l'))],
             'show_on_public' => true,
             'sort_order' => 1,
         ]);
@@ -70,6 +71,7 @@ class ProgramHeroTextTest extends TestCase
             'description' => 'Bu Genel Tanıtım Metni Hero İçinde Asla Görünmemelidir',
             'is_active' => true,
             'is_featured' => true,
+            'hero_days' => [strtolower(now()->format('l'))],
             'show_on_public' => true,
             'sort_order' => 1,
         ]);

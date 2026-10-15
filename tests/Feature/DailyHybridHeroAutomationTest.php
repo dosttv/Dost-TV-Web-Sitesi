@@ -125,18 +125,28 @@ class DailyHybridHeroAutomationTest extends TestCase
         Carbon::setTestNow();
     }
 
-    public function test_legacy_null_hero_days_serves_as_fallback_for_all_days(): void
+    public function test_legacy_null_or_empty_hero_days_is_never_shown(): void
     {
         Carbon::setTestNow('2026-09-08 10:00:00'); // Tuesday
 
-        $program = Program::create([
-            'name' => 'Legacy Program',
-            'slug' => 'legacy-program',
+        $programNull = Program::create([
+            'name' => 'Legacy Null Days Program',
+            'slug' => 'legacy-null-program',
             'is_active' => true,
             'show_on_public' => true,
             'is_featured' => true,
             'hero_days' => null, // Legacy null hero_days
             'sort_order' => 1,
+        ]);
+
+        $programEmpty = Program::create([
+            'name' => 'Legacy Empty Array Program',
+            'slug' => 'legacy-empty-program',
+            'is_active' => true,
+            'show_on_public' => true,
+            'is_featured' => true,
+            'hero_days' => [], // Empty array hero_days
+            'sort_order' => 2,
         ]);
 
         SiteCache::forgetHomeHeroPrograms();
@@ -145,7 +155,9 @@ class DailyHybridHeroAutomationTest extends TestCase
         $service = app(HomepageDataService::class);
         $heroPrograms = $service->resolveHeroPrograms();
 
-        $this->assertTrue($heroPrograms->contains('id', $program->id));
+        // New rule: hero_days null or [] must NEVER be shown on any day
+        $this->assertFalse($heroPrograms->contains('id', $programNull->id));
+        $this->assertFalse($heroPrograms->contains('id', $programEmpty->id));
 
         Carbon::setTestNow();
     }
@@ -423,6 +435,460 @@ class DailyHybridHeroAutomationTest extends TestCase
 
         // Scenario J: Passive live item does NOT appear in Hero
         $this->assertFalse($hero->contains('slug', 'passive-live-show'));
+
+        Carbon::setTestNow();
+    }
+
+    /**
+     * Senaryo 1: Bugün canlı yayını olan aktif program otomatik Hero'da görünür.
+     */
+    public function test_scenario_1_active_live_program_today_automatically_appears_in_hero(): void
+    {
+        Carbon::setTestNow('2026-10-15 14:00:00'); // Thursday (ISO day 3)
+
+        $program = Program::create([
+            'name' => 'Canlı Yayın Programı',
+            'slug' => 'canli-yayin-programi',
+            'is_active' => true,
+            'show_on_public' => true,
+            'is_featured' => false, // Manuel hero kapalı
+            'hero_days' => null,
+        ]);
+
+        $template = ScheduleTemplate::create([
+            'name' => 'Aktif Dönem',
+            'is_active' => true,
+            'status' => 'published',
+            'valid_from' => '2026-01-01',
+        ]);
+
+        ScheduleTemplateItem::create([
+            'schedule_template_id' => $template->id,
+            'day_of_week' => 3, // Thursday
+            'start_time' => '14:00:00',
+            'end_time' => '15:00:00',
+            'program_id' => $program->id,
+            'is_live' => true,
+            'is_active' => true,
+        ]);
+
+        SiteCache::forgetHomeHeroPrograms();
+        $hero = app(HomepageDataService::class)->resolveHeroPrograms();
+
+        $this->assertTrue($hero->contains('id', $program->id));
+        Carbon::setTestNow();
+    }
+
+    /**
+     * Senaryo 2: Bugün canlı yayını olmayan, Hero'da Göster açık ama günleri boş program görünmez.
+     */
+    public function test_scenario_2_non_live_program_with_is_featured_true_but_empty_hero_days_does_not_appear(): void
+    {
+        Carbon::setTestNow('2026-10-15 14:00:00'); // Thursday
+
+        $programNullDays = Program::create([
+            'name' => 'Hero Açık Ama Günleri Null',
+            'slug' => 'hero-null-days',
+            'is_active' => true,
+            'show_on_public' => true,
+            'is_featured' => true,
+            'hero_days' => null,
+        ]);
+
+        $programEmptyDays = Program::create([
+            'name' => 'Hero Açık Ama Günleri Boş Dizi',
+            'slug' => 'hero-empty-days',
+            'is_active' => true,
+            'show_on_public' => true,
+            'is_featured' => true,
+            'hero_days' => [],
+        ]);
+
+        SiteCache::forgetHomeHeroPrograms();
+        $hero = app(HomepageDataService::class)->resolveHeroPrograms();
+
+        $this->assertFalse($hero->contains('id', $programNullDays->id));
+        $this->assertFalse($hero->contains('id', $programEmptyDays->id));
+        Carbon::setTestNow();
+    }
+
+    /**
+     * Senaryo 3: Hero'da Göster açık ve bugünün günü seçili program manuel Hero'da görünür.
+     */
+    public function test_scenario_3_is_featured_true_with_today_selected_appears_in_manual_hero(): void
+    {
+        Carbon::setTestNow('2026-10-15 14:00:00'); // Thursday
+
+        $program = Program::create([
+            'name' => 'Perşembe Manuel Hero',
+            'slug' => 'persembe-manuel-hero',
+            'is_active' => true,
+            'show_on_public' => true,
+            'is_featured' => true,
+            'hero_days' => ['thursday', 'friday'],
+        ]);
+
+        SiteCache::forgetHomeHeroPrograms();
+        $hero = app(HomepageDataService::class)->resolveHeroPrograms();
+
+        $this->assertTrue($hero->contains('id', $program->id));
+        Carbon::setTestNow();
+    }
+
+    /**
+     * Senaryo 4: Hero'da Göster açık ancak yalnızca başka gün seçili program bugün görünmez.
+     */
+    public function test_scenario_4_is_featured_true_with_other_day_only_selected_does_not_appear_today(): void
+    {
+        Carbon::setTestNow('2026-10-15 14:00:00'); // Thursday
+
+        $program = Program::create([
+            'name' => 'Sadece Cuma Manuel Hero',
+            'slug' => 'sadece-cuma-manuel-hero',
+            'is_active' => true,
+            'show_on_public' => true,
+            'is_featured' => true,
+            'hero_days' => ['friday', 'saturday'],
+        ]);
+
+        SiteCache::forgetHomeHeroPrograms();
+        $hero = app(HomepageDataService::class)->resolveHeroPrograms();
+
+        $this->assertFalse($hero->contains('id', $program->id));
+        Carbon::setTestNow();
+    }
+
+    /**
+     * Senaryo 5: Hero'da Göster kapalı ancak bugünün canlı yayını olan program otomatik görünür.
+     */
+    public function test_scenario_5_is_featured_false_program_with_live_broadcast_today_appears_automatically(): void
+    {
+        Carbon::setTestNow('2026-10-15 14:00:00'); // Thursday
+
+        $program = Program::create([
+            'name' => 'Hero Kapalı Canlı Program',
+            'slug' => 'hero-kapali-canli-program',
+            'is_active' => true,
+            'show_on_public' => true,
+            'is_featured' => false,
+            'hero_days' => [],
+        ]);
+
+        $template = ScheduleTemplate::create([
+            'name' => 'Aktif Dönem',
+            'is_active' => true,
+            'status' => 'published',
+            'valid_from' => '2026-01-01',
+        ]);
+
+        ScheduleTemplateItem::create([
+            'schedule_template_id' => $template->id,
+            'day_of_week' => 3, // Thursday
+            'start_time' => '16:00:00',
+            'end_time' => '17:00:00',
+            'program_id' => $program->id,
+            'is_live' => true,
+            'is_active' => true,
+        ]);
+
+        SiteCache::forgetHomeHeroPrograms();
+        $hero = app(HomepageDataService::class)->resolveHeroPrograms();
+
+        $this->assertTrue($hero->contains('id', $program->id));
+        Carbon::setTestNow();
+    }
+
+    /**
+     * Senaryo 6: Pasif program Hero'da görünmez.
+     */
+    public function test_scenario_6_inactive_program_never_appears_in_hero(): void
+    {
+        Carbon::setTestNow('2026-10-15 14:00:00'); // Thursday
+
+        // Pasif program (status = archived, show_on_public = true -> is_active = false)
+        $program = Program::create([
+            'name' => 'Pasif Program',
+            'slug' => 'pasif-program',
+            'status' => 'archived',
+            'show_on_public' => true,
+            'is_featured' => true,
+            'hero_days' => ['thursday'],
+        ]);
+
+        SiteCache::forgetHomeHeroPrograms();
+        $hero = app(HomepageDataService::class)->resolveHeroPrograms();
+
+        $this->assertFalse($hero->contains('id', $program->id));
+        Carbon::setTestNow();
+    }
+
+    /**
+     * Senaryo 7: Public görünürlüğü kapalı program Hero'da görünmez.
+     */
+    public function test_scenario_7_non_public_program_never_appears_in_hero(): void
+    {
+        Carbon::setTestNow('2026-10-15 14:00:00'); // Thursday
+
+        $program = Program::create([
+            'name' => 'Gizli Program',
+            'slug' => 'gizli-program',
+            'status' => 'active',
+            'show_on_public' => false,
+            'is_featured' => true,
+            'hero_days' => ['thursday'],
+        ]);
+
+        SiteCache::forgetHomeHeroPrograms();
+        $hero = app(HomepageDataService::class)->resolveHeroPrograms();
+
+        $this->assertFalse($hero->contains('id', $program->id));
+        Carbon::setTestNow();
+    }
+
+    /**
+     * Senaryo 8: Aynı program hem otomatik hem manuel aday olduğunda bir kez görünür.
+     */
+    public function test_scenario_8_program_both_live_and_manual_candidate_appears_exactly_once(): void
+    {
+        Carbon::setTestNow('2026-10-15 14:00:00'); // Thursday
+
+        $program = Program::create([
+            'name' => 'Çift Aday Program',
+            'slug' => 'cift-aday-program',
+            'is_active' => true,
+            'show_on_public' => true,
+            'is_featured' => true,
+            'hero_days' => ['thursday'],
+            'sort_order' => 1,
+        ]);
+
+        $template = ScheduleTemplate::create([
+            'name' => 'Aktif Dönem',
+            'is_active' => true,
+            'status' => 'published',
+            'valid_from' => '2026-01-01',
+        ]);
+
+        ScheduleTemplateItem::create([
+            'schedule_template_id' => $template->id,
+            'day_of_week' => 3, // Thursday
+            'start_time' => '18:00:00',
+            'end_time' => '19:00:00',
+            'program_id' => $program->id,
+            'is_live' => true,
+            'is_active' => true,
+        ]);
+
+        SiteCache::forgetHomeHeroPrograms();
+        $hero = app(HomepageDataService::class)->resolveHeroPrograms();
+
+        $matchingCount = $hero->where('id', $program->id)->count();
+        $this->assertEquals(1, $matchingCount);
+        Carbon::setTestNow();
+    }
+
+    /**
+     * Senaryo 9: Manuel programlar Hero Sırası değerine göre sıralanır.
+     */
+    public function test_scenario_9_manual_programs_are_ordered_by_sort_order_and_id(): void
+    {
+        Carbon::setTestNow('2026-10-15 14:00:00'); // Thursday
+
+        $prog1 = Program::create([
+            'name' => 'Manuel Program Sıra 50',
+            'slug' => 'manuel-prog-50',
+            'is_active' => true,
+            'show_on_public' => true,
+            'is_featured' => true,
+            'hero_days' => ['thursday'],
+            'sort_order' => 50,
+        ]);
+
+        $prog2 = Program::create([
+            'name' => 'Manuel Program Sıra 5',
+            'slug' => 'manuel-prog-5',
+            'is_active' => true,
+            'show_on_public' => true,
+            'is_featured' => true,
+            'hero_days' => ['thursday'],
+            'sort_order' => 5,
+        ]);
+
+        $prog3 = Program::create([
+            'name' => 'Manuel Program Sıra 20',
+            'slug' => 'manuel-prog-20',
+            'is_active' => true,
+            'show_on_public' => true,
+            'is_featured' => true,
+            'hero_days' => ['thursday'],
+            'sort_order' => 20,
+        ]);
+
+        SiteCache::forgetHomeHeroPrograms();
+        $hero = app(HomepageDataService::class)->resolveHeroPrograms();
+
+        $idx2 = $hero->search(fn ($p) => $p->id === $prog2->id);
+        $idx3 = $hero->search(fn ($p) => $p->id === $prog3->id);
+        $idx1 = $hero->search(fn ($p) => $p->id === $prog1->id);
+
+        $this->assertLessThan($idx3, $idx2); // 5 comes before 20
+        $this->assertLessThan($idx1, $idx3); // 20 comes before 50
+        Carbon::setTestNow();
+    }
+
+    /**
+     * Senaryo 10: Perşembe'den Cuma'ya geçildiğinde manuel programlar gün kurallarına göre değişir.
+     */
+    public function test_scenario_10_transition_from_thursday_to_friday_updates_manual_programs_by_day_rules(): void
+    {
+        Carbon::setTestNow('2026-10-15 14:00:00'); // Thursday
+
+        $thursdayProg = Program::create([
+            'name' => 'Sadece Perşembe Programı',
+            'slug' => 'sadece-persembe-prog',
+            'is_active' => true,
+            'show_on_public' => true,
+            'is_featured' => true,
+            'hero_days' => ['thursday'],
+        ]);
+
+        $fridayProg = Program::create([
+            'name' => 'Sadece Cuma Programı',
+            'slug' => 'sadece-cuma-prog',
+            'is_active' => true,
+            'show_on_public' => true,
+            'is_featured' => true,
+            'hero_days' => ['friday'],
+        ]);
+
+        $service = app(HomepageDataService::class);
+
+        // Perşembe kontrolü
+        SiteCache::forgetHomeHeroPrograms();
+        $thursdayHero = $service->resolveHeroPrograms();
+        $this->assertTrue($thursdayHero->contains('id', $thursdayProg->id));
+        $this->assertFalse($thursdayHero->contains('id', $fridayProg->id));
+
+        // Cuma'ya geçiş
+        Carbon::setTestNow('2026-10-16 14:00:00'); // Friday
+        SiteCache::forgetHomeHeroPrograms();
+        $fridayHero = $service->resolveHeroPrograms();
+        $this->assertFalse($fridayHero->contains('id', $thursdayProg->id));
+        $this->assertTrue($fridayHero->contains('id', $fridayProg->id));
+
+        Carbon::setTestNow();
+    }
+
+    /**
+     * Senaryo 11: Yayın dönemi değiştiğinde otomatik canlı programlar yeni döneme göre güncellenir.
+     */
+    public function test_scenario_11_broadcast_period_change_updates_live_programs_to_new_period(): void
+    {
+        Carbon::setTestNow('2026-10-15 14:00:00'); // Thursday
+
+        $progPeriod1 = Program::create([
+            'name' => '1. Dönem Canlı Programı',
+            'slug' => 'donem-1-prog',
+            'is_active' => true,
+            'show_on_public' => true,
+            'is_featured' => false,
+        ]);
+
+        $progPeriod2 = Program::create([
+            'name' => '2. Dönem Canlı Programı',
+            'slug' => 'donem-2-prog',
+            'is_active' => true,
+            'show_on_public' => true,
+            'is_featured' => false,
+        ]);
+
+        $template1 = ScheduleTemplate::create([
+            'name' => 'Dönem 1 (Eski)',
+            'is_active' => true,
+            'status' => 'published',
+            'valid_from' => '2026-01-01',
+        ]);
+
+        ScheduleTemplateItem::create([
+            'schedule_template_id' => $template1->id,
+            'day_of_week' => 3,
+            'start_time' => '14:00:00',
+            'end_time' => '15:00:00',
+            'program_id' => $progPeriod1->id,
+            'is_live' => true,
+            'is_active' => true,
+        ]);
+
+        $template2 = ScheduleTemplate::create([
+            'name' => 'Dönem 2 (Yeni)',
+            'is_active' => false,
+            'status' => 'published',
+            'valid_from' => '2026-06-01',
+        ]);
+
+        ScheduleTemplateItem::create([
+            'schedule_template_id' => $template2->id,
+            'day_of_week' => 3,
+            'start_time' => '14:00:00',
+            'end_time' => '15:00:00',
+            'program_id' => $progPeriod2->id,
+            'is_live' => true,
+            'is_active' => true,
+        ]);
+
+        SiteCache::forgetHomeHeroPrograms();
+        $service = app(HomepageDataService::class);
+        $heroInitial = $service->resolveHeroPrograms();
+        $this->assertTrue($heroInitial->contains('id', $progPeriod1->id));
+        $this->assertFalse($heroInitial->contains('id', $progPeriod2->id));
+
+        // Dönem 2'yi gösterime al
+        app(\App\Services\Schedule\ScheduleCalendarService::class)->activateTemplate($template2);
+
+        $heroAfter = $service->resolveHeroPrograms();
+        $this->assertFalse($heroAfter->contains('id', $progPeriod1->id));
+        $this->assertTrue($heroAfter->contains('id', $progPeriod2->id));
+
+        Carbon::setTestNow();
+    }
+
+    /**
+     * Senaryo 12: Hero Günleri değişikliği kaydedildikten sonra cache temizlenir ve yeni sonuç görüntülenir.
+     */
+    public function test_scenario_12_updating_hero_days_clears_cache_and_shows_updated_results(): void
+    {
+        Carbon::setTestNow('2026-10-15 14:00:00'); // Thursday
+
+        $program = Program::create([
+            'name' => 'Dinamik Gün Değişen Program',
+            'slug' => 'dinamik-gun-prog',
+            'is_active' => true,
+            'show_on_public' => true,
+            'is_featured' => true,
+            'hero_days' => ['friday'], // İlk başta sadece Cuma
+        ]);
+
+        $service = app(HomepageDataService::class);
+
+        // Perşembe günü Hero'da yok
+        SiteCache::forgetHomeHeroPrograms();
+        $this->assertFalse($service->resolveHeroPrograms()->contains('id', $program->id));
+
+        // Editör Perşembe'yi ekliyor ve kaydediyor (Model event cache invalidation)
+        $program->update([
+            'hero_days' => ['thursday', 'friday'],
+        ]);
+
+        // Cache manuel silinmeden doğrudan servisten çekildiğinde Hero'da belirmeli
+        $this->assertTrue($service->resolveHeroPrograms()->contains('id', $program->id));
+
+        // Editör günleri boşaltıyor
+        $program->update([
+            'hero_days' => [],
+        ]);
+
+        // Gün boşaltıldığında anında Hero'dan düşmeli
+        $this->assertFalse($service->resolveHeroPrograms()->contains('id', $program->id));
 
         Carbon::setTestNow();
     }
