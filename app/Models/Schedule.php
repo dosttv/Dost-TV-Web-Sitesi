@@ -30,6 +30,7 @@ class Schedule extends Model
         'is_repeat',
         'is_package',
         'is_active',
+        'show_in_hero',
         'sort_order',
         'custom_title',
         'note',
@@ -41,6 +42,7 @@ class Schedule extends Model
         'is_repeat' => 'boolean',
         'is_package' => 'boolean',
         'is_active' => 'boolean',
+        'show_in_hero' => 'boolean',
         'sort_order' => 'integer',
     ];
 

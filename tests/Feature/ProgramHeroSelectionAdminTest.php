@@ -84,8 +84,8 @@ class ProgramHeroSelectionAdminTest extends TestCase
         $heroProgramsWithFeatured = $service->getHomepageData()['heroPrograms'];
         $this->assertEquals(['Program A', 'Program B'], $heroProgramsWithFeatured->pluck('name')->all());
 
-        // 3. Turn off is_live for item B in schedule -> B drops from Hero
-        $itemB->update(['is_live' => false]);
+        // 3. Turn off show_in_hero for item B in schedule -> B drops from Hero
+        $itemB->update(['show_in_hero' => false]);
         $heroProgramsAfterBNotLive = $service->getHomepageData()['heroPrograms'];
         $this->assertEquals(['Program A'], $heroProgramsAfterBNotLive->pluck('name')->all());
 

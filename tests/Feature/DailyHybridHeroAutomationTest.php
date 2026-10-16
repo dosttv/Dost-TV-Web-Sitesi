@@ -927,12 +927,12 @@ class DailyHybridHeroAutomationTest extends TestCase
         // Cache manuel silinmeden doğrudan servisten çekildiğinde Hero'da belirmeli
         $this->assertTrue($service->resolveHeroPrograms()->contains('id', $program->id));
 
-        // Editör canlı işaretini kaldırıyor
+        // Editör Hero'da Göster anahtarını kapatıyor
         $item->update([
-            'is_live' => false,
+            'show_in_hero' => false,
         ]);
 
-        // Canlı kaldırıldığında anında Hero'dan düşmeli
+        // Hero kapatıldığında anında Hero'dan düşmeli
         $this->assertFalse($service->resolveHeroPrograms()->contains('id', $program->id));
 
         Carbon::setTestNow();

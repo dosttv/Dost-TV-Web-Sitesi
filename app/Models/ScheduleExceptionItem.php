@@ -11,9 +11,36 @@ class ScheduleExceptionItem extends Model
 {
     use HasFactory;
 
+    protected array $explicitlyPassedAttributes = [];
+
+    public function setAttribute($key, $value)
+    {
+        $this->explicitlyPassedAttributes[$key] = true;
+
+        return parent::setAttribute($key, $value);
+    }
+
+    public function wasExplicitlySet(string $key): bool
+    {
+        return isset($this->explicitlyPassedAttributes[$key]);
+    }
+
     protected static function booted(): void
     {
-        static::saved(function () {
+        static::creating(function (self $item) {
+            if ($item->is_live && ! $item->wasExplicitlySet('show_in_hero')) {
+                $item->show_in_hero = true;
+            }
+        });
+
+        static::updating(function (self $item) {
+            if ($item->isDirty('is_live') && $item->is_live && ! $item->wasExplicitlySet('show_in_hero')) {
+                $item->show_in_hero = true;
+            }
+        });
+
+        static::saved(function (self $item) {
+            $item->explicitlyPassedAttributes = [];
             SiteCache::forgetHomeHeroPrograms();
             SiteCache::forgetHomepage();
             SiteCache::forgetMenu('header_primary');
@@ -36,6 +63,7 @@ class ScheduleExceptionItem extends Model
         'is_repeat',
         'is_package',
         'is_active',
+        'show_in_hero',
         'note',
     ];
 
@@ -44,6 +72,7 @@ class ScheduleExceptionItem extends Model
         'is_repeat' => 'boolean',
         'is_package' => 'boolean',
         'is_active' => 'boolean',
+        'show_in_hero' => 'boolean',
     ];
 
     public function exception(): BelongsTo

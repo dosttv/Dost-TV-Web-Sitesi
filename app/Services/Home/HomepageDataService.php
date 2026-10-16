@@ -532,22 +532,22 @@ class HomepageDataService
         return SiteCache::rememberHomeHeroPrograms(function () {
             $today = now();
 
-            // Bugüne ait canlı yayınlanan programlar (yayın saati sırasıyla)
+            // Bugüne ait Hero'da gösterilecek programlar (yayın saati sırasıyla)
             $todaySchedule = $this->scheduleResolver->getScheduleForDate($today);
-            $livePrograms = collect();
+            $heroPrograms = collect();
 
             foreach ($todaySchedule as $item) {
-                if (empty($item->is_live) || empty($item->is_active)) {
+                if (empty($item->show_in_hero) || empty($item->is_active)) {
                     continue;
                 }
 
                 $program = $item->program ?? null;
                 if ($program && $program->show_on_public && $program->is_active) {
-                    $livePrograms->push($program);
+                    $heroPrograms->push($program);
                 }
             }
 
-            return $livePrograms->unique('id')->values();
+            return $heroPrograms->unique('id')->values();
         });
     }
 

@@ -463,6 +463,31 @@ class ScheduleCalendarPage extends Page implements HasActions, HasForms, HasTabl
                         );
 
                         SiteCache::forgetHomeHeroPrograms();
+                        SiteCache::forgetHomepage();
+                    }),
+
+                ToggleColumn::make('show_in_hero')
+                    ->label("Hero'da Göster")
+                    ->afterStateUpdated(function ($record, bool $state) {
+                        $startTimeStr = Carbon::parse($record->start_time)->format('H:i');
+                        $endTimeStr = $record->end_time ? Carbon::parse($record->end_time)->format('H:i') : '23:59';
+                        $logMessage = sprintf(
+                            '%s %s–%s %s.',
+                            $record->display_title,
+                            $startTimeStr,
+                            $endTimeStr,
+                            $state ? "Hero'da gösterilecek şekilde işaretlendi" : "Hero'dan kaldırıldı"
+                        );
+
+                        AuditLogger::log(
+                            action: 'updated',
+                            message: $logMessage,
+                            subject: $record,
+                            subjectLabel: 'Yayın Akışı'
+                        );
+
+                        SiteCache::forgetHomeHeroPrograms();
+                        SiteCache::forgetHomepage();
                     }),
             ])
             ->defaultSort('start_time', 'asc')
@@ -482,6 +507,7 @@ class ScheduleCalendarPage extends Page implements HasActions, HasForms, HasTabl
                         'is_repeat' => (bool) $record->is_repeat,
                         'is_package' => (bool) ($record->is_package ?? false),
                         'is_active' => (bool) $record->is_active,
+                        'show_in_hero' => (bool) ($record->show_in_hero ?? false),
                         'custom_title' => $record->custom_title,
                         'image' => $record->image ?? null,
                         'description' => $record->description ?? null,
@@ -530,6 +556,7 @@ class ScheduleCalendarPage extends Page implements HasActions, HasForms, HasTabl
                             'is_repeat' => (bool) ($data['is_repeat'] ?? false),
                             'is_package' => (bool) ($data['is_package'] ?? false),
                             'is_active' => $isActive,
+                            'show_in_hero' => (bool) ($data['show_in_hero'] ?? false),
                             'custom_title' => $data['custom_title'] ?? null,
                             'image' => $data['image'] ?? null,
                             'description' => $data['description'] ?? null,
@@ -654,6 +681,7 @@ class ScheduleCalendarPage extends Page implements HasActions, HasForms, HasTabl
                             'is_repeat' => (bool) ($formData['is_repeat'] ?? false),
                             'is_package' => (bool) ($formData['is_package'] ?? false),
                             'is_active' => (bool) ($formData['is_active'] ?? true),
+                            'show_in_hero' => (bool) ($formData['show_in_hero'] ?? false),
                             'note' => $formData['note'] ?? null,
                         ]);
 
@@ -686,6 +714,7 @@ class ScheduleCalendarPage extends Page implements HasActions, HasForms, HasTabl
                                 'is_repeat' => (bool) ($formData['is_repeat'] ?? false),
                                 'is_package' => (bool) ($formData['is_package'] ?? false),
                                 'is_active' => (bool) ($formData['is_active'] ?? true),
+                                'show_in_hero' => (bool) ($formData['show_in_hero'] ?? false),
                                 'custom_title' => $formData['custom_title'] ?? null,
                                 'image' => $formData['image'] ?? null,
                                 'description' => $formData['description'] ?? null,
@@ -1050,6 +1079,7 @@ class ScheduleCalendarPage extends Page implements HasActions, HasForms, HasTabl
                         'is_repeat' => (bool) ($data['is_repeat'] ?? false),
                         'is_package' => (bool) ($data['is_package'] ?? false),
                         'is_active' => $isActive,
+                        'show_in_hero' => (bool) ($data['show_in_hero'] ?? false),
                         'note' => $data['note'] ?? null,
                     ]);
 
@@ -1251,17 +1281,32 @@ class ScheduleCalendarPage extends Page implements HasActions, HasForms, HasTabl
 
             Section::make('Yayın Bilgisi')
                 ->schema([
-                    Grid::make(4)->schema([
-                        Toggle::make('is_live')->label('Canlı Yayın')->default(false),
+                    Grid::make(3)->schema([
+                        Toggle::make('is_live')
+                            ->label('Canlı Yayın')
+                            ->default(false)
+                            ->live()
+                            ->afterStateUpdated(function ($state, $set) {
+                                if ($state) {
+                                    $set('show_in_hero', true);
+                                    $set('is_active', true);
+                                }
+                            }),
                         Toggle::make('is_repeat')->label('Tekrar Yayın')->default(false),
                         Toggle::make('is_package')
                             ->label('Paket Yayın')
                             ->default(false)
                             ->helperText('Önceden hazırlanmış/banttan yayınlanan paket içerik.'),
+                    ]),
+                    Grid::make(2)->schema([
                         Toggle::make('is_active')
                             ->label('Akışta Görünür')
                             ->default(true)
-                            ->helperText('Kapattığınızda yayın kaydı silinmez; public yayın akışında gösterilmez ve bu saat aralığı yeni aktif yayın için boş kabul edilir.'),
+                            ->helperText('Kapattığınızda yayın kaydı silinmez; public yayın akışında ve Hero slider\'ında gösterilmez. Bu saat aralığı yeni aktif yayın için boş kabul edilir.'),
+                        Toggle::make('show_in_hero')
+                            ->label("Hero'da Göster")
+                            ->default(false)
+                            ->helperText('Açık olduğunda bugünün ana sayfa Hero slider\'ında gösterilir. (Akışta Görünür açık olmalıdır).'),
                     ]),
                 ]),
 

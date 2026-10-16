@@ -137,6 +137,7 @@ class BroadcastScheduleResolver
             'is_repeat' => $item->is_repeat,
             'is_package' => (bool) ($item->is_package ?? false),
             'is_active' => $item->is_active,
+            'show_in_hero' => (bool) ($item->show_in_hero ?? false),
             'note' => $item->note,
             'display_title' => $item->custom_title ?: ($item->program?->name ?? 'Özel Yayın'),
         ];
