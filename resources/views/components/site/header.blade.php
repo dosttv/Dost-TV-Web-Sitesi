@@ -89,7 +89,7 @@
         </a>
 
         {{-- Navigation Menu Section --}}
-        <x-site.menu location="header_primary" />
+        <x-site.menu location="header_primary" :logo-url="$logoUrl" :logo-alt-text="$logoAltText" :preview="$preview" />
 
         {{-- Right Section: Search, Hamburger & Live Dropdown CTA --}}
         <div class="flex items-center gap-2 sm:gap-3" x-data="{ searchOpen: false }" @keydown.escape.window="searchOpen = false">

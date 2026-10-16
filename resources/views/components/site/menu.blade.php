@@ -241,10 +241,19 @@
 
             {{-- Drawer Header --}}
             <div class="flex items-center justify-between border-b border-white/10 px-5 py-4 shrink-0">
-                <span class="text-base font-bold tracking-tight text-white flex items-center gap-2">
-                    <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-rose-500 to-amber-400 font-black text-slate-950 text-xs">D</span>
-                    Dost<span class="text-rose-500">TV</span>
-                </span>
+                <a href="{{ ($preview ?? false) ? 'javascript:void(0)' : route('home') }}" 
+                   @click="mobileMenuOpen = false"
+                   class="flex shrink-0 items-center">
+                    @if(!empty($logoUrl))
+                        <img src="{{ $logoUrl }}" 
+                             alt="{{ $logoAltText ?? 'Dost TV' }}" 
+                             class="h-8 max-h-9 w-auto max-w-[125px] object-contain">
+                    @else
+                        <span class="text-base font-bold tracking-tight text-white">
+                            {{ $logoAltText ?? 'Dost TV' }}
+                        </span>
+                    @endif
+                </a>
                 <button type="button" 
                         @click="mobileMenuOpen = false" 
                         class="rounded-lg p-2 text-slate-400 hover:bg-white/10 hover:text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
