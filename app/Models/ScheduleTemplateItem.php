@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\SiteCache;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -10,6 +11,21 @@ use Illuminate\Support\Facades\Storage;
 class ScheduleTemplateItem extends Model
 {
     use HasFactory;
+
+    protected static function booted(): void
+    {
+        static::saved(function () {
+            SiteCache::forgetHomeHeroPrograms();
+            SiteCache::forgetHomepage();
+            SiteCache::forgetMenu('header_primary');
+        });
+
+        static::deleted(function () {
+            SiteCache::forgetHomeHeroPrograms();
+            SiteCache::forgetHomepage();
+            SiteCache::forgetMenu('header_primary');
+        });
+    }
 
     protected $fillable = [
         'schedule_template_id',

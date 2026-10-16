@@ -40,6 +40,13 @@ class ProgramHeroTextTest extends TestCase
 
     public function test_homepage_hero_renders_hero_text_exclusively_without_fallback_to_description(): void
     {
+        $template = \App\Models\ScheduleTemplate::create([
+            'name' => 'Aktif Şablon',
+            'slug' => 'aktif-sablon',
+            'status' => 'published',
+            'is_active' => true,
+        ]);
+
         $programWithHeroText = Program::create([
             'name' => 'Hero Metinli Program',
             'slug' => 'hero-metinli-program',
@@ -48,10 +55,17 @@ class ProgramHeroTextTest extends TestCase
             'hero_text' => 'Özel Ana Sayfa Hero Açıklaması',
             'description' => 'Genel Program Tanıtım Açıklaması Detayı',
             'is_active' => true,
-            'is_featured' => true,
-            'hero_days' => [strtolower(now()->format('l'))],
             'show_on_public' => true,
-            'sort_order' => 1,
+        ]);
+
+        \App\Models\ScheduleTemplateItem::create([
+            'schedule_template_id' => $template->id,
+            'program_id' => $programWithHeroText->id,
+            'day_of_week' => now()->dayOfWeekIso - 1,
+            'start_time' => '10:00',
+            'end_time' => '11:00',
+            'is_live' => true,
+            'is_active' => true,
         ]);
 
         $response = $this->get(route('home'));
@@ -62,6 +76,13 @@ class ProgramHeroTextTest extends TestCase
 
     public function test_homepage_hero_does_not_render_description_block_when_hero_text_is_null(): void
     {
+        $template = \App\Models\ScheduleTemplate::create([
+            'name' => 'Aktif Şablon 2',
+            'slug' => 'aktif-sablon-2',
+            'status' => 'published',
+            'is_active' => true,
+        ]);
+
         $programWithoutHeroText = Program::create([
             'name' => 'Hero Metinsiz Program',
             'slug' => 'hero-metinsiz-program',
@@ -70,10 +91,17 @@ class ProgramHeroTextTest extends TestCase
             'hero_text' => null,
             'description' => 'Bu Genel Tanıtım Metni Hero İçinde Asla Görünmemelidir',
             'is_active' => true,
-            'is_featured' => true,
-            'hero_days' => [strtolower(now()->format('l'))],
             'show_on_public' => true,
-            'sort_order' => 1,
+        ]);
+
+        \App\Models\ScheduleTemplateItem::create([
+            'schedule_template_id' => $template->id,
+            'program_id' => $programWithoutHeroText->id,
+            'day_of_week' => now()->dayOfWeekIso - 1,
+            'start_time' => '10:00',
+            'end_time' => '11:00',
+            'is_live' => true,
+            'is_active' => true,
         ]);
 
         $response = $this->get(route('home'));
@@ -92,7 +120,7 @@ class ProgramHeroTextTest extends TestCase
         $formContent = file_get_contents(app_path('Filament/Resources/Programs/Schemas/ProgramForm.php'));
         $this->assertStringContainsString("'hero_text'", $formContent);
         $this->assertStringContainsString("'Ana Sayfa Hero Metni'", $formContent);
-        $this->assertStringContainsString("Ana sayfadaki büyük program görselinin üzerinde gösterilir.", $formContent);
+        $this->assertStringContainsString("günün yayın akışında canlı yayın olarak Hero", $formContent);
     }
 
     public function test_schedule_and_description_fields_remain_isolated(): void

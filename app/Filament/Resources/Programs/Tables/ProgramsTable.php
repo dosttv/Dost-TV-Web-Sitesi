@@ -78,42 +78,14 @@ class ProgramsTable
                     ->tooltip('Görünürlüğü değiştirmek için tıklayın'),
 
                 ToggleColumn::make('is_featured')
-                    ->label('Hero')
-                    ->tooltip("Programın ana sayfa Hero slider'ında görünürlüğünü değiştirmek için tıklayın"),
+                    ->label('Öne Çıkan')
+                    ->tooltip('Öne çıkan programlar listelerindeki görünürlüğünü değiştirmek için tıklayın'),
 
                 TextInputColumn::make('sort_order')
-                    ->label('Hero Sırası')
+                    ->label('Sıralama')
                     ->rules(['required', 'integer', 'min:0'])
                     ->sortable()
-                    ->tooltip('Hero slider gösterim sırası (küçük sayı önce gösterilir)'),
-
-                TextColumn::make('hero_days')
-                    ->label('Hero Günleri')
-                    ->badge()
-                    ->color(fn ($state, Program $record) => ! $record->is_featured ? 'gray' : (empty($state) ? 'warning' : 'info'))
-                    ->formatStateUsing(function ($state, Program $record) {
-                        if (! $record->is_featured) {
-                            return 'Kapalı';
-                        }
-
-                        if (empty($state)) {
-                            return 'Gün Seçilmedi';
-                        }
-
-                        $dayLabels = [
-                            'monday' => 'Pzt',
-                            'tuesday' => 'Sal',
-                            'wednesday' => 'Çar',
-                            'thursday' => 'Per',
-                            'friday' => 'Cum',
-                            'saturday' => 'Cmt',
-                            'sunday' => 'Paz',
-                        ];
-
-                        $shortDays = array_map(fn ($d) => $dayLabels[$d] ?? $d, (array) $state);
-                        return implode(', ', $shortDays);
-                    })
-                    ->toggleable(isToggledHiddenByDefault: false),
+                    ->tooltip('Program gösterim sırası (küçük sayı önce gösterilir)'),
             ])
             ->filters([
                 SelectFilter::make('status')

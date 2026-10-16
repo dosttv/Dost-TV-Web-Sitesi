@@ -536,7 +536,7 @@ class ScheduleCalendarPage extends Page implements HasActions, HasForms, HasTabl
                             'note' => $data['note'] ?? null,
                         ]);
 
-                        if ($record instanceof ScheduleTemplateItem && $record->template && $record->template->status === 'published') {
+                        if ($record instanceof ScheduleTemplateItem && $record->template && $record->template->status === 'published' && ! $record->template->is_active) {
                             $record->template->update(['status' => 'draft']);
                         }
 
@@ -561,7 +561,7 @@ class ScheduleCalendarPage extends Page implements HasActions, HasForms, HasTabl
                                 $template = $record->template;
                                 $record->delete();
 
-                                if ($template && $template->status === 'published') {
+                                if ($template && $template->status === 'published' && ! $template->is_active) {
                                     $template->update(['status' => 'draft']);
                                 }
                             } else {
@@ -657,7 +657,7 @@ class ScheduleCalendarPage extends Page implements HasActions, HasForms, HasTabl
                             'note' => $formData['note'] ?? null,
                         ]);
 
-                        if ($item->template && $item->template->status === 'published') {
+                        if ($item->template && $item->template->status === 'published' && ! $item->template->is_active) {
                             $item->template->update(['status' => 'draft']);
                         }
 
@@ -692,7 +692,7 @@ class ScheduleCalendarPage extends Page implements HasActions, HasForms, HasTabl
                                 'note' => $formData['note'] ?? null,
                             ]);
 
-                            if ($record->template && $record->template->status === 'published') {
+                            if ($record->template && $record->template->status === 'published' && ! $record->template->is_active) {
                                 $record->template->update(['status' => 'draft']);
                             }
 
@@ -1053,7 +1053,7 @@ class ScheduleCalendarPage extends Page implements HasActions, HasForms, HasTabl
                         'note' => $data['note'] ?? null,
                     ]);
 
-                    if ($template->status === 'published') {
+                    if ($template->status === 'published' && ! $template->is_active) {
                         $template->update(['status' => 'draft']);
                     }
 

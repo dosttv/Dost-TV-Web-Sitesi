@@ -4,7 +4,6 @@ namespace App\Filament\Resources\Programs\Schemas;
 
 use App\Models\Episode;
 use App\Models\Program;
-use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
@@ -51,50 +50,24 @@ class ProgramForm
 
                                 Textarea::make('hero_text')
                                     ->label('Ana Sayfa Hero Metni')
-                                    ->helperText('Ana sayfadaki büyük program görselinin üzerinde gösterilir. Kısa ve vurucu, tercihen 2–3 satır olmalıdır.')
+                                    ->helperText('Program günün yayın akışında canlı yayın olarak Hero\'da gösterildiğinde afişin üzerinde yer alır. Kısa ve vurucu, tercihen 2–3 satır olmalıdır.')
                                     ->placeholder('Ana sayfa hero alanında görünecek kısa ve vurucu tanıtım metni...')
                                     ->rows(2)
                                     ->columnSpanFull(),
 
                                 Grid::make(2)->schema([
                                     Toggle::make('is_featured')
-                                        ->label("Hero'da Göster")
-                                        ->helperText("Açık olduğunda program, aktif ve public olduğu sürece ana sayfa Hero slider'ında gösterilir.")
-                                        ->default(false)
-                                        ->live(),
+                                        ->label('Öne Çıkarılan Program')
+                                        ->helperText('Öne çıkan programlar koleksiyonlarında ve listelerinde yer alır.')
+                                        ->default(false),
 
                                     TextInput::make('sort_order')
-                                        ->label('Hero Sırası')
+                                        ->label('Sıralama')
                                         ->numeric()
                                         ->default(0)
                                         ->minValue(0)
-                                        ->helperText('Daha küçük sayı Hero\'da daha önce gösterilir. (Örn: 0, 1, 2)'),
+                                        ->helperText('Program listelerinde ve koleksiyonlarda görüntülenme sırası. (Örn: 0, 1, 2)'),
                                 ]),
-
-                                CheckboxList::make('hero_days')
-                                    ->label('Hero Günleri')
-                                    ->options([
-                                        'monday' => 'Pazartesi',
-                                        'tuesday' => 'Salı',
-                                        'wednesday' => 'Çarşamba',
-                                        'thursday' => 'Perşembe',
-                                        'friday' => 'Cuma',
-                                        'saturday' => 'Cumartesi',
-                                        'sunday' => 'Pazar',
-                                    ])
-                                    ->columns(4)
-                                    ->live()
-                                    ->helperText("Programın manuel olarak Hero'da görünmesini istediğiniz günleri seçin. Hiçbir gün seçilmezse program manuel Hero'da gösterilmez. Bugünün canlı yayınları bu ayardan bağımsız olarak otomatik gösterilir.")
-                                    ->hint(function ($get) {
-                                        if ((bool) $get('is_featured') && empty($get('hero_days'))) {
-                                            return "Hero'da Göster açık ancak henüz bir gün seçilmedi. Program manuel Hero'da görünmeyecek.";
-                                        }
-
-                                        return null;
-                                    })
-                                    ->hintIcon('heroicon-m-exclamation-triangle')
-                                    ->hintColor('warning')
-                                    ->columnSpanFull(),
 
                                 Textarea::make('description')
                                     ->label('Program Tanıtım Metni')

@@ -100,7 +100,7 @@ class ScheduleCalendarService
             ]);
         }
 
-        if ($template->status === 'published') {
+        if ($template->status === 'published' && ! $template->is_active) {
             $template->update(['status' => 'draft']);
         }
 
@@ -120,7 +120,7 @@ class ScheduleCalendarService
             $newItem->save();
         }
 
-        if ($template->status === 'published') {
+        if ($template->status === 'published' && ! $template->is_active) {
             $template->update(['status' => 'draft']);
         }
 
@@ -142,7 +142,7 @@ class ScheduleCalendarService
             $newItem->save();
         }
 
-        if ($targetTemplate->status === 'published') {
+        if ($targetTemplate->status === 'published' && ! $targetTemplate->is_active) {
             $targetTemplate->update(['status' => 'draft']);
         }
 

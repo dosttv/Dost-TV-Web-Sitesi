@@ -520,18 +520,19 @@ class HomepageDataService
     }
 
     /**
-     * Resolves unique public/active Hero programs using a daily hybrid approach:
-     * 1. Today's live broadcast scheduled programs (chronological start time order)
-     * 2. Today's manual featured programs (hero_days filter or legacy null fallback, sort_order)
-     * Deduplicated by program ID preserving live programs first.
+     * Resolves hero programs strictly from today's broadcast schedule:
+     * - Active published template
+     * - Today's schedule items where is_live = true and is_active = true
+     * - Associated program must be valid, public, and active
+     * - Ordered by broadcast start_time ascending
+     * - Deduplicated by program ID (earliest broadcast time preserved)
      */
     public function resolveHeroPrograms(): Collection
     {
         return SiteCache::rememberHomeHeroPrograms(function () {
             $today = now();
-            $todayDayKey = strtolower($today->format('l'));
 
-            // 1. Bugüne ait canlı yayınlanan programlar (yayın saati sırasıyla)
+            // Bugüne ait canlı yayınlanan programlar (yayın saati sırasıyla)
             $todaySchedule = $this->scheduleResolver->getScheduleForDate($today);
             $livePrograms = collect();
 
@@ -546,30 +547,7 @@ class HomepageDataService
                 }
             }
 
-            $livePrograms = $livePrograms->unique('id')->values();
-            $liveProgramIds = $livePrograms->pluck('id')->all();
-
-            // 2. Bugüne özel manuel öne çıkan programlar (Hero Sırası / sort_order sırasıyla)
-            // hero_days boş veya null ise hiçbir gün gösterilmez; bugünün günü özellikle seçilmiş olmalıdır.
-            $manualPrograms = Program::query()
-                ->where('show_on_public', true)
-                ->where('is_active', true)
-                ->where('is_featured', true)
-                ->orderBy('sort_order')
-                ->orderBy('id')
-                ->get()
-                ->filter(function (Program $program) use ($todayDayKey) {
-                    if (empty($program->hero_days)) {
-                        return false; // hero_days boş ise hiçbir gün manuel hero'ya girmez
-                    }
-
-                    return in_array($todayDayKey, (array) $program->hero_days, true);
-                })
-                ->reject(fn (Program $p) => in_array($p->id, $liveProgramIds, true))
-                ->values();
-
-            // 3. Otomatik canlılar önce + Manuel programlar sonra, tekil program ID
-            return $livePrograms->concat($manualPrograms)->values();
+            return $livePrograms->unique('id')->values();
         });
     }
 
