@@ -41,6 +41,36 @@ class SyncYoutubePlaylistsCommand extends Command
         $this->line("Atlanan mevcut video: {$stats['skipped_existing']}");
         $this->line("Hata: {$stats['errors']}");
 
+        \Illuminate\Support\Facades\Log::info("YouTube Otomatik Senkronizasyon Tamamlandı: {$stats['created_episodes']} yeni bölüm eklendi.", [
+            'checked_programs' => $stats['checked_programs'],
+            'checked_playlists' => $stats['checked_playlists'],
+            'new_videos_found' => $stats['new_videos_found'],
+            'created_episodes' => $stats['created_episodes'],
+            'skipped_existing' => $stats['skipped_existing'],
+            'errors' => $stats['errors'],
+            'dry_run' => $isDryRun,
+        ]);
+
+        if (! $isDryRun) {
+            \Illuminate\Support\Facades\Cache::put('youtube_sync_last_run_at', now()->toIso8601String(), 86400 * 30);
+            \Illuminate\Support\Facades\Cache::put('youtube_sync_last_stats', $stats, 86400 * 30);
+
+            \App\Services\Audit\AuditLogger::log(
+                action: 'synced',
+                message: "Otomatik YouTube Senkronizasyonu tamamlandı: {$stats['created_episodes']} yeni bölüm eklendi ({$stats['checked_playlists']} playlist kontrol edildi, {$stats['skipped_existing']} video atlandı, {$stats['errors']} hata).",
+                subjectLabel: 'YouTube Senkronizasyonu',
+                metadata: [
+                    'type' => 'automated_scheduler',
+                    'checked_programs' => $stats['checked_programs'],
+                    'checked_playlists' => $stats['checked_playlists'],
+                    'new_videos_found' => $stats['new_videos_found'],
+                    'created_episodes' => $stats['created_episodes'],
+                    'skipped_existing' => $stats['skipped_existing'],
+                    'errors' => $stats['errors'],
+                ]
+            );
+        }
+
         if ($isDryRun && ! empty($stats['details'])) {
             $this->newLine();
             $this->info('--- DRY RUN DETAYLARI ---');
