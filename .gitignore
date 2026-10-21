@@ -20,6 +20,7 @@
 /storage/pail
 /vendor
 /scripts/browser_test/node_modules
+/scripts/browser_test/output
 /storage/logs/*.json
 /storage/logs/*.log
 Homestead.json
