@@ -20,12 +20,21 @@ if (video) {
     if (Hls.isSupported()) {
         const hls = new Hls({
             enableWorker: true,
-            lowLatencyMode: true,
-            backBufferLength: 90,
+            lowLatencyMode: false,
+            liveDurationInfinity: true,
+            liveSyncDurationCount: 3,
+            liveMaxLatencyDurationCount: 10,
+            maxBufferHole: 1.0,
+            nudgeMaxRetry: 10,
+            backBufferLength: 30,
         });
 
         hls.loadSource(primarySrc);
         hls.attachMedia(video);
+
+        hls.on(Hls.Events.MANIFEST_PARSED, function () {
+            video.play().catch(function () {});
+        });
 
         hls.on(Hls.Events.ERROR, function (_event, data) {
             if (data.fatal) {
@@ -54,10 +63,16 @@ if (video) {
                         }
                         break;
                 }
+            } else if (data.details === Hls.ErrorDetails.BUFFER_STALLED_ERROR) {
+                hls.startLoad();
             }
         });
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
         video.src = primarySrc;
+
+        video.addEventListener('loadedmetadata', function () {
+            video.play().catch(function () {});
+        });
 
         video.addEventListener('error', function () {
             if (!triedBackup && backupSrc && backupSrc.trim() !== '') {
