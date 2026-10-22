@@ -76,7 +76,7 @@
     }
 @endphp
 
-<header id="{{ $headerId }}" x-data="{ mobileMenuOpen: false }" @keydown.escape.window="mobileMenuOpen = false" class="{{ ($headerSticky && !$preview) ? 'sticky top-0' : 'relative' }} z-40 border-b border-white/5 bg-slate-950/80 backdrop-blur rounded-xl">
+<header id="{{ $headerId }}" x-data="{ mobileMenuOpen: false }" @keydown.escape.window="mobileMenuOpen = false" class="{{ ($headerSticky && !$preview) ? 'sticky top-0' : 'relative' }} z-40 border-b border-white/5 bg-slate-950/95 md:bg-slate-950/80 md:backdrop-blur rounded-xl">
     <div class="dost-header-inner mx-auto flex max-w-7xl items-center justify-between">
         {{-- Logo Section --}}
         <a href="{{ $preview ? 'javascript:void(0)' : route('home') }}" class="flex shrink-0 items-center gap-2">

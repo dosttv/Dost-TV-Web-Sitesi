@@ -480,20 +480,22 @@ class SiteSetting extends Model
 
     public static function current(): self
     {
-        return static::query()->first() ?? static::query()->forceCreate([
-            'id' => 1,
-            'site_name' => 'Dost TV',
-            'title_suffix' => '| DOST TV',
-            'search_engine_indexing' => true,
-            'canonical_url_mode' => 'current_url',
-            'live_tv_type' => 'iframe',
-            'live_button_text' => 'Canlı İzle',
-            'live_button_is_visible' => true,
-            'search_is_visible' => true,
-            'header_is_sticky' => true,
-            'footer_show_socials' => true,
-            'footer_show_contact' => true,
-            'footer_show_bank_link' => true,
-        ]);
+        return SiteCache::rememberSiteSetting(function () {
+            return static::query()->first() ?? static::query()->forceCreate([
+                'id' => 1,
+                'site_name' => 'Dost TV',
+                'title_suffix' => '| DOST TV',
+                'search_engine_indexing' => true,
+                'canonical_url_mode' => 'current_url',
+                'live_tv_type' => 'iframe',
+                'live_button_text' => 'Canlı İzle',
+                'live_button_is_visible' => true,
+                'search_is_visible' => true,
+                'header_is_sticky' => true,
+                'footer_show_socials' => true,
+                'footer_show_contact' => true,
+                'footer_show_bank_link' => true,
+            ]);
+        });
     }
 }

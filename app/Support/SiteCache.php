@@ -72,14 +72,25 @@ class SiteCache
         Cache::forget(self::THEME_KEY);
     }
 
+    public static function rememberSiteSetting(Closure $callback): mixed
+    {
+        return Cache::remember(self::SITE_SETTING_KEY, self::TTL_SECONDS, $callback);
+    }
+
     public static function forgetSiteSetting(): void
     {
         Cache::forget(self::SITE_SETTING_KEY);
     }
 
+    public static function rememberHomepageResolvedBlocks(Closure $callback): mixed
+    {
+        return Cache::remember(self::HOMEPAGE_SECTIONS_KEY . ':resolved_blocks', self::getHomepageTtl(), $callback);
+    }
+
     public static function forgetHomepage(): void
     {
         Cache::forget(self::HOMEPAGE_SECTIONS_KEY);
+        Cache::forget(self::HOMEPAGE_SECTIONS_KEY . ':resolved_blocks');
         Cache::forget(self::HOME_BANNERS_KEY);
         Cache::forget(self::HOME_FEATURED_PROGRAMS_KEY);
         self::forgetHomeHeroPrograms();

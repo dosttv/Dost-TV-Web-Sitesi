@@ -51,9 +51,15 @@
 
 @if ($slides->isNotEmpty())
     <section class="relative w-full overflow-hidden bg-slate-950"
-             x-data="{ active: 0, count: {{ $slides->count() }} }"
+             x-data="{ active: 0, count: {{ $slides->count() }}, timer: null }"
              x-init="
-                 setInterval(() => active = (active + 1) % count, 7000);
+                 const start = () => { if (!timer && count > 1) timer = setInterval(() => active = (active + 1) % count, 7000); };
+                 const stop = () => { if (timer) { clearInterval(timer); timer = null; } };
+                 start();
+                 document.addEventListener('visibilitychange', () => {
+                     if (document.hidden) stop();
+                     else start();
+                 });
                  window.addEventListener('message', (e) => {
                      if (e.data && e.data.type === 'select-hero-slide' && e.data.programId) {
                          const pId = parseInt(e.data.programId, 10);
@@ -105,6 +111,9 @@
                             <img
                                 src="{{ $imageUrl ?: $mobileImageUrl }}"
                                 alt="{{ $program->name }}"
+                                width="1920"
+                                height="720"
+                                decoding="async"
                                 class="absolute inset-0 h-full w-full object-cover transform scale-100 transition-transform duration-1000"
                                 @if ($index === 0)
                                     fetchpriority="high"

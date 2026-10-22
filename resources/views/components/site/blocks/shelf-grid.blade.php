@@ -76,6 +76,8 @@
                     grid-auto-columns: calc((100% - {{ max(0, $mobileCols - 1) * $mobileGapPx }}px) / {{ $mobileCols }}) !important;
                     gap: {{ $mobileGapPx }}px !important;
                     overflow-x: auto !important;
+                    -webkit-overflow-scrolling: touch !important;
+                    overscroll-behavior-x: contain !important;
                     scroll-snap-type: x mandatory !important;
                 @else
                     display: grid !important;
@@ -173,13 +175,19 @@
          x-data="{
              canScrollLeft: false,
              canScrollRight: true,
+             _ticking: false,
 
              updateNav() {
-                 const el = this.$refs.sliderContainer;
-                 if (!el) return;
-
-                 this.canScrollLeft = el.scrollLeft > 4;
-                 this.canScrollRight = el.scrollLeft + el.clientWidth < el.scrollWidth - 4;
+                 if (this._ticking) return;
+                 this._ticking = true;
+                 requestAnimationFrame(() => {
+                     const el = this.$refs.sliderContainer;
+                     if (el) {
+                         this.canScrollLeft = el.scrollLeft > 4;
+                         this.canScrollRight = el.scrollLeft + el.clientWidth < el.scrollWidth - 4;
+                     }
+                     this._ticking = false;
+                 });
              },
 
              scrollLeft() {
@@ -225,7 +233,7 @@
         <div x-ref="sliderContainer"
              @scroll.passive="updateNav()"
              @resize.window.debounce.100ms.passive="updateNav()"
-             class="shelf-container carousel-scrollbar-hidden pb-4 pt-1 scroll-smooth"
+             class="shelf-container carousel-scrollbar-hidden pb-4 pt-1"
              style="--cols-desk: {{ $desktopCols }}; --cols-tab: {{ $tabletCols }}; --cols-mob: {{ $mobileCols }};">
             @foreach ($items as $item)
                 <div class="shelf-item snap-start flex-shrink-0 w-full min-w-0">

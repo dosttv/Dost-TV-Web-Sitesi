@@ -34,6 +34,8 @@ class HomepageDataService
     {
         $settings = $settings ?? SiteSetting::current();
 
+        $isPublicRequest = ($sections === null);
+
         if ($sections === null) {
             $activeLayout = HomepageLayout::query()->active()->first();
             if ($activeLayout && ! empty($activeLayout->published_sections)) {
@@ -77,30 +79,10 @@ class HomepageDataService
 
         $todaySchedule = $this->scheduleResolver->getScheduleForDate(now());
 
-        // Resolve dynamic block data
-        $resolvedBlockData = [];
-        foreach ($sections as $block) {
-            if (empty($block['visible'])) {
-                continue;
-            }
-
-            $uuid = $block['uuid'] ?? ($block['key'] ?? 'block_' . uniqid());
-            $blockType = $block['block_type'] ?? ($block['key'] ?? '');
-
-            if ($blockType === 'content_shelf') {
-                $resolvedBlockData[$uuid] = $this->resolveContentShelfData($block);
-            } elseif ($blockType === 'video_collection') {
-                $resolvedBlockData[$uuid] = $this->resolveVideoBlockData($block);
-            } elseif ($blockType === 'program_showcase') {
-                $resolvedBlockData[$uuid] = $this->resolveProgramBlockData($block);
-            } elseif ($blockType === 'category_shelf') {
-                $resolvedBlockData[$uuid] = $this->resolveCategoryShelfData($block);
-            } elseif ($blockType === 'youtube_channel_shelf') {
-                $resolvedBlockData[$uuid] = $this->resolveYoutubeChannelShelfData($block);
-            } elseif ($blockType === 'instagram_videos') {
-                $resolvedBlockData[$uuid] = $this->resolveInstagramVideoBlockData($block);
-            }
-        }
+        // Resolve dynamic block data (cached for public visits, fresh for editor preview)
+        $resolvedBlockData = $isPublicRequest
+            ? SiteCache::rememberHomepageResolvedBlocks(fn () => $this->resolveAllSectionsData($sections))
+            : $this->resolveAllSectionsData($sections);
 
         $fixedSettings = $sections['_fixed_settings'] ?? [
             'header' => [
@@ -157,6 +139,38 @@ class HomepageDataService
             'resolvedBlockData' => $resolvedBlockData,
             'fixedSettings' => $fixedSettings,
         ];
+    }
+
+    /**
+     * Resolves all active dynamic block data for homepage rendering.
+     */
+    public function resolveAllSectionsData(array $sections): array
+    {
+        $resolvedBlockData = [];
+        foreach ($sections as $block) {
+            if (empty($block['visible'])) {
+                continue;
+            }
+
+            $uuid = $block['uuid'] ?? ($block['key'] ?? 'block_' . uniqid());
+            $blockType = $block['block_type'] ?? ($block['key'] ?? '');
+
+            if ($blockType === 'content_shelf') {
+                $resolvedBlockData[$uuid] = $this->resolveContentShelfData($block);
+            } elseif ($blockType === 'video_collection') {
+                $resolvedBlockData[$uuid] = $this->resolveVideoBlockData($block);
+            } elseif ($blockType === 'program_showcase') {
+                $resolvedBlockData[$uuid] = $this->resolveProgramBlockData($block);
+            } elseif ($blockType === 'category_shelf') {
+                $resolvedBlockData[$uuid] = $this->resolveCategoryShelfData($block);
+            } elseif ($blockType === 'youtube_channel_shelf') {
+                $resolvedBlockData[$uuid] = $this->resolveYoutubeChannelShelfData($block);
+            } elseif ($blockType === 'instagram_videos') {
+                $resolvedBlockData[$uuid] = $this->resolveInstagramVideoBlockData($block);
+            }
+        }
+
+        return $resolvedBlockData;
     }
 
     /**
@@ -263,6 +277,8 @@ class HomepageDataService
             ->where('show_on_public', true)
             ->where('is_active', true);
 
+        $safeLimit = $limit ?? 24;
+
         if ($sourceMode === 'manual') {
             if (empty($itemIds)) {
                 return collect();
@@ -273,7 +289,7 @@ class HomepageDataService
                 ->sortBy(fn ($ep) => array_search($ep->id, $itemIds))
                 ->values();
 
-            return $limit === null ? $items : $items->take($limit);
+            return $items->take($safeLimit);
         }
 
         if ($sourceMode === 'category') {
@@ -284,7 +300,7 @@ class HomepageDataService
                     ->sortBy(fn ($ep) => array_search($ep->id, $itemIds))
                     ->values();
 
-                return $limit === null ? $fixed : $fixed->take($limit);
+                return $fixed->take($safeLimit);
             }
 
             if (! $categoryId) {
@@ -295,6 +311,7 @@ class HomepageDataService
                 ->whereHas('program.categories', fn ($q) => $q->where('categories.id', $categoryId))
                 ->orderByDesc('aired_at')
                 ->orderByDesc('id')
+                ->take($safeLimit)
                 ->get();
 
             if (! empty($itemIds)) {
@@ -304,11 +321,10 @@ class HomepageDataService
                     ->sortBy(fn ($ep) => array_search($ep->id, $itemIds))
                     ->values();
 
-                $merged = $manualOrdered->concat($catVideos)->unique('id')->values();
-                return $limit === null ? $merged : $merged->take($limit);
+                return $manualOrdered->concat($catVideos)->unique('id')->take($safeLimit)->values();
             }
 
-            return $limit === null ? $catVideos : $catVideos->take($limit);
+            return $catVideos;
         }
 
         // Hybrid mode: Pinned video item_ids first + remaining category videos
@@ -328,11 +344,11 @@ class HomepageDataService
                 ->whereNotIn('id', $pinned->pluck('id')->all())
                 ->orderByDesc('aired_at')
                 ->orderByDesc('id')
+                ->take($safeLimit)
                 ->get();
         }
 
-        $merged = $pinned->concat($autoCat)->unique('id')->values();
-        return $limit === null ? $merged : $merged->take($limit);
+        return $pinned->concat($autoCat)->unique('id')->take($safeLimit)->values();
     }
 
     /**
@@ -344,6 +360,7 @@ class HomepageDataService
         $sourceMode = $block['source_mode'] ?? 'video_collections';
         $collectionId = $block['collection_id'] ?? ($block['video_collection_id'] ?? null);
         $featuredVideoIds = array_filter((array) ($block['homepage_featured_video_ids'] ?? ($block['featured_video_ids'] ?? [])));
+        $safeLimit = $limit ?? 24;
 
         // 1. Explicitly selected homepage featured videos (when not in hybrid_videos mode)
         if (! empty($featuredVideoIds) && $sourceMode !== 'hybrid_videos') {
@@ -356,14 +373,14 @@ class HomepageDataService
                 ->sortBy(fn ($ep) => array_search($ep->id, $featuredVideoIds))
                 ->values();
 
-            return $limit === null ? $episodes : $episodes->take($limit);
+            return $episodes->take($safeLimit);
         }
 
         // 2. Video Collection binding with limit for homepage showcase
         if ($collectionId) {
             $collection = VideoCollection::query()->where('is_active', true)->find($collectionId);
             if ($collection) {
-                return $collection->resolveEpisodes($limit);
+                return $collection->resolveEpisodes($safeLimit);
             }
         }
 
@@ -392,13 +409,9 @@ class HomepageDataService
                 ->orderByDesc('aired_at')
                 ->orderByDesc('id');
 
-            if ($limit === null) {
-                return $pinnedEpisodes->concat($autoQuery->get());
-            }
-
-            $remainingCount = $limit - $pinnedEpisodes->count();
+            $remainingCount = $safeLimit - $pinnedEpisodes->count();
             if ($remainingCount <= 0) {
-                return $pinnedEpisodes->take($limit);
+                return $pinnedEpisodes->take($safeLimit);
             }
 
             return $pinnedEpisodes->concat($autoQuery->take($remainingCount)->get());
@@ -417,10 +430,10 @@ class HomepageDataService
                 });
             }
         } elseif ($sourceMode === 'random_videos') {
-            return $query->inRandomOrder()->when($limit !== null, fn ($q) => $q->take($limit))->get();
+            return $query->inRandomOrder()->take($safeLimit)->get();
         }
 
-        return $query->orderByDesc('aired_at')->orderByDesc('id')->when($limit !== null, fn ($q) => $q->take($limit))->get();
+        return $query->orderByDesc('aired_at')->orderByDesc('id')->take($safeLimit)->get();
     }
 
     /**

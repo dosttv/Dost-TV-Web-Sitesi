@@ -139,7 +139,7 @@
         {!! $siteSettings->custom_head_code !!}
     @endif
 
-    @vite(['resources/css/app.css', 'resources/css/custom.css', 'resources/js/app.js'])
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="min-h-screen theme-bg-main theme-text-main antialiased">
     @if($isPreviewActive)

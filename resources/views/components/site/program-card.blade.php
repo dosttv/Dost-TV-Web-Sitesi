@@ -39,7 +39,7 @@
 <div class="group block w-full">
     <div class="{{ $aspectClass }} overflow-hidden ring-1 ring-white/10" style="background-color: var(--color-surface, #0f172a); border-radius: {{ $radiusPx }}px;">
         @if ($imageUrl)
-            <img src="{{ $imageUrl }}" alt="{{ $title }}" loading="lazy" class="h-full w-full object-cover transition duration-300 group-hover:scale-105">
+            <img src="{{ $imageUrl }}" alt="{{ $title }}" width="300" height="400" loading="lazy" decoding="async" class="h-full w-full object-cover transition duration-300 group-hover:scale-105">
         @else
             <div class="flex h-full w-full items-center justify-center text-4xl font-black text-slate-700">
                 {{ mb_substr($title ?: 'P', 0, 1) }}

@@ -227,7 +227,7 @@
              x-transition:leave-start="opacity-100"
              x-transition:leave-end="opacity-0"
              @click="mobileMenuOpen = false"
-             class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm"></div>
+             class="fixed inset-0 bg-slate-950/80"></div>
 
         {{-- Slide-over Panel --}}
         <div class="fixed top-0 right-0 flex h-dvh h-full w-[min(92vw,390px)] flex-col bg-slate-900 border-l border-white/10 shadow-2xl text-slate-100"
