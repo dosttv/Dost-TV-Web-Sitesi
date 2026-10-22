@@ -7,6 +7,7 @@ use App\Models\Page;
 use App\Models\Program;
 use App\Models\SiteSetting;
 use App\Models\User;
+use App\Support\MailSettings;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Facades\Event;
@@ -33,6 +34,11 @@ class AppServiceProvider extends ServiceProvider
             'program' => Program::class,
             'category' => Category::class,
         ]);
+
+        // SMTP credentials managed from Site Ayarları > E-posta (SMTP) override .env.
+        $this->app->afterResolving('mail.manager', function () {
+            MailSettings::applyFromDatabase();
+        });
 
         View::composer('layouts.app', function ($view) {
             $view->with([

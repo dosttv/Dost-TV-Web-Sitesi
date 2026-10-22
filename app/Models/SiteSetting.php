@@ -3,7 +3,11 @@
 namespace App\Models;
 
 use App\Support\SiteCache;
+use Illuminate\Contracts\Encryption\DecryptException;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Log;
 
 class SiteSetting extends Model
 {
@@ -68,6 +72,18 @@ class SiteSetting extends Model
         'custom_body_code',
         'header_responsive_settings',
         'theme_settings',
+        'mail_enabled',
+        'mail_host',
+        'mail_port',
+        'mail_encryption',
+        'mail_username',
+        'mail_password',
+        'mail_from_address',
+        'mail_from_name',
+    ];
+
+    protected $hidden = [
+        'mail_password',
     ];
 
     protected $casts = [
@@ -87,7 +103,33 @@ class SiteSetting extends Model
         'header_responsive_settings' => 'array',
         'recommended_sites' => 'array',
         'theme_settings' => 'array',
+        'mail_enabled' => 'boolean',
+        'mail_port' => 'integer',
     ];
+
+    /**
+     * Encrypted at rest; tolerates values that can no longer be decrypted
+     * (e.g. after an APP_KEY rotation) instead of breaking every page.
+     */
+    protected function mailPassword(): Attribute
+    {
+        return Attribute::make(
+            get: function (?string $value) {
+                if (blank($value)) {
+                    return null;
+                }
+
+                try {
+                    return Crypt::decryptString($value);
+                } catch (DecryptException $e) {
+                    Log::warning('SiteSetting.mail_password could not be decrypted (APP_KEY mismatch or corrupted data); treating as empty.');
+
+                    return null;
+                }
+            },
+            set: fn (?string $value) => blank($value) ? null : Crypt::encryptString($value),
+        );
+    }
 
     public static function getDefaultThemeSettings(): array
     {

@@ -3,8 +3,10 @@
 namespace App\Filament\Pages;
 
 use App\Models\SiteSetting;
+use App\Support\MailSettings;
 use App\Support\SiteCache;
 use BackedEnum;
+use Filament\Actions\Action;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -14,10 +16,13 @@ use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Filament\Schemas\Components\Actions;
+use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Support\Facades\Mail;
 
 class SiteSettings extends Page implements HasForms
 {
@@ -145,10 +150,136 @@ class SiteSettings extends Page implements HasForms
                                     ->rows(4)
                                     ->helperText('</body> etiketinin kapanışından hemen önce public sayfalara enjekte edilir.'),
                             ]),
+
+                        // 4. E-posta (SMTP) Sekmesi
+                        Tab::make('E-posta (SMTP)')
+                            ->icon('heroicon-o-envelope')
+                            ->schema([
+                                Toggle::make('mail_enabled')
+                                    ->label('Panelden Girilen SMTP Ayarlarını Kullan')
+                                    ->helperText('Açık: Sitedeki tüm e-postalar (iletişim formu, davetler, şifre sıfırlama) aşağıdaki SMTP bilgileriyle gönderilir. Kapalı: Sunucudaki .env MAIL_* ayarları kullanılır.')
+                                    ->default(false)
+                                    ->live(),
+
+                                Grid::make(2)->schema([
+                                    TextInput::make('mail_host')
+                                        ->label('SMTP Sunucusu')
+                                        ->placeholder('smtp.gmail.com')
+                                        ->required(fn ($get) => (bool) $get('mail_enabled'))
+                                        ->maxLength(255),
+
+                                    TextInput::make('mail_port')
+                                        ->label('Port')
+                                        ->numeric()
+                                        ->minValue(1)
+                                        ->maxValue(65535)
+                                        ->placeholder('587')
+                                        ->required(fn ($get) => (bool) $get('mail_enabled')),
+
+                                    Select::make('mail_encryption')
+                                        ->label('Şifreleme')
+                                        ->options(MailSettings::ENCRYPTION_OPTIONS)
+                                        ->default('tls')
+                                        ->selectablePlaceholder(false),
+
+                                    TextInput::make('mail_username')
+                                        ->label('Kullanıcı Adı')
+                                        ->placeholder('bildirim@dosttv.com')
+                                        ->autocomplete('off')
+                                        ->maxLength(255),
+
+                                    TextInput::make('mail_password')
+                                        ->label('Şifre')
+                                        ->password()
+                                        ->revealable()
+                                        ->autocomplete('new-password')
+                                        ->dehydrated(fn ($state) => filled($state))
+                                        ->helperText(fn () => filled(SiteSetting::current()->mail_password)
+                                            ? 'Kayıtlı bir şifre var. Değiştirmek istemiyorsanız boş bırakın.'
+                                            : 'Şifre şifrelenmiş olarak saklanır. Gmail için "Uygulama Şifresi" kullanın.'),
+
+                                    TextInput::make('mail_from_address')
+                                        ->label('Gönderen E-posta Adresi')
+                                        ->email()
+                                        ->placeholder('info@dosttv.com')
+                                        ->required(fn ($get) => (bool) $get('mail_enabled'))
+                                        ->maxLength(255),
+
+                                    TextInput::make('mail_from_name')
+                                        ->label('Gönderen Adı')
+                                        ->placeholder('DOST TV')
+                                        ->maxLength(255),
+                                ]),
+
+                                Actions::make([
+                                    Action::make('sendTestMail')
+                                        ->label('Test E-postası Gönder')
+                                        ->icon('heroicon-o-paper-airplane')
+                                        ->color('gray')
+                                        ->modalHeading('Test E-postası Gönder')
+                                        ->modalDescription('Formdaki güncel SMTP bilgileriyle (kaydetmeden önce de) bir test e-postası gönderilir.')
+                                        ->modalSubmitActionLabel('Gönder')
+                                        ->schema([
+                                            TextInput::make('recipient')
+                                                ->label('Alıcı E-posta Adresi')
+                                                ->email()
+                                                ->required()
+                                                ->default(fn () => auth()->user()?->email),
+                                        ])
+                                        ->action(fn (array $data) => $this->sendTestMail($data['recipient'])),
+                                ])->key('mailTestActions'),
+                            ]),
                     ])
                     ->columnSpanFull(),
             ])
             ->statePath('data');
+    }
+
+    public function sendTestMail(string $recipient): void
+    {
+        $settings = $this->data ?? [];
+
+        // Use the stored password when the field was left blank.
+        if (blank($settings['mail_password'] ?? null)) {
+            $settings['mail_password'] = SiteSetting::current()->mail_password;
+        }
+
+        if (! MailSettings::isUsable($settings)) {
+            Notification::make()
+                ->title('SMTP bilgileri eksik')
+                ->body('Test için en az SMTP sunucusu, port ve gönderen e-posta adresi girilmelidir.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $fromAddress = $settings['mail_from_address'];
+        $fromName = $settings['mail_from_name'] ?: config('mail.from.name');
+
+        try {
+            Mail::build(MailSettings::smtpConfig($settings))->raw(
+                "DOST TV mail sistemi başarıyla çalışıyor.\n\nBu e-posta Site Ayarları > E-posta (SMTP) sekmesinden gönderilen bir test mesajıdır.\n\nSunucu: {$settings['mail_host']}:{$settings['mail_port']}",
+                fn ($message) => $message->to($recipient)
+                    ->from($fromAddress, $fromName)
+                    ->subject('DOST TV Test E-postası')
+            );
+        } catch (\Throwable $e) {
+            Notification::make()
+                ->title('Test e-postası gönderilemedi')
+                ->body($e->getMessage())
+                ->danger()
+                ->persistent()
+                ->send();
+
+            return;
+        }
+
+        Notification::make()
+            ->title('Test e-postası gönderildi')
+            ->body("{$recipient} adresinin gelen kutusunu (ve spam klasörünü) kontrol edin.")
+            ->success()
+            ->send();
     }
 
     public function save(): void
