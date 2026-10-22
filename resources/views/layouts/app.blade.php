@@ -139,6 +139,8 @@
         {!! $siteSettings->custom_head_code !!}
     @endif
 
+    @stack('head')
+
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="min-h-screen theme-bg-main theme-text-main antialiased">
