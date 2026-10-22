@@ -63,11 +63,13 @@ class HeroResponsiveImageFocusTest extends TestCase
         $this->assertStringContainsString('<picture', $html);
         $this->assertStringContainsString('media="(max-width: 767px)"', $html);
 
-        // Mobile image for Program A
-        $this->assertStringContainsString('storage/programs/mobile-a.jpg', $html);
+        // Mobile image for Program A (served as resized WebP variants)
+        $this->assertStringContainsString('img/960/programs/mobile-a.jpg', $html);
+        $this->assertStringContainsString('img/480/programs/mobile-a.jpg 480w', $html);
 
         // Fallback for Program B uses horizontal image
-        $this->assertStringContainsString('storage/programs/horizontal-b.jpg', $html);
+        $this->assertStringContainsString('img/1920/programs/horizontal-b.jpg', $html);
+        $this->assertStringContainsString('img/640/programs/horizontal-b.jpg 640w', $html);
 
         // Object cover is used, no focus object-position CSS rules
         $this->assertStringContainsString('object-cover', $html);

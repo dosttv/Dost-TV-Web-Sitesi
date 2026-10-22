@@ -130,7 +130,7 @@
                                     } else {
                                         $cleanPath = ltrim(preg_replace('/^\/?storage\//', '', $siteLogo), '/');
                                         if (\Illuminate\Support\Facades\Storage::disk('public')->exists($cleanPath)) {
-                                            $logoUrl = \Illuminate\Support\Facades\Storage::disk('public')->url($cleanPath);
+                                            $logoUrl = \App\Support\ResponsiveImage::url($cleanPath, 160);
                                         }
                                     }
                                 }

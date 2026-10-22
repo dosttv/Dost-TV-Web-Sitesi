@@ -9,6 +9,13 @@ return Application::configure(basePath: dirname(__DIR__))
         web: __DIR__.'/../routes/web.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
+        then: function () {
+            // Resized image variants: deliberately outside the "web" group so
+            // responses set no session cookies and stay cacheable at the CDN.
+            \Illuminate\Support\Facades\Route::get('/img/{width}/{path}', \App\Http\Controllers\MediaResizeController::class)
+                ->where(['width' => '[0-9]+', 'path' => '.+'])
+                ->name('media.resize');
+        },
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->redirectTo(

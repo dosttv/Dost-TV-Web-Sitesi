@@ -71,7 +71,7 @@
                 $logoUrl = null;
             }
         } elseif (is_string($rawLogo) && !empty(trim($rawLogo))) {
-            $logoUrl = \Illuminate\Support\Facades\Storage::disk('public')->url($rawLogo);
+            $logoUrl = \App\Support\ResponsiveImage::url($rawLogo, 640);
         }
     }
 @endphp

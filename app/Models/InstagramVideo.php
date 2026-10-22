@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
+use App\Support\ResponsiveImage;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
-use Illuminate\Support\Facades\Storage;
 
 class InstagramVideo extends Model
 {
@@ -52,7 +52,8 @@ class InstagramVideo extends Model
     public function getCoverImageUrlAttribute(): ?string
     {
         if (filled($this->cover_image)) {
-            return Storage::disk('public')->url($this->cover_image);
+            // Resized WebP variant; uploaded covers are often ~2 MB PNGs.
+            return ResponsiveImage::url($this->cover_image, 640);
         }
 
         if (filled($this->thumbnail_url)) {

@@ -77,21 +77,14 @@
             @foreach ($slides as $index => $slide)
                 @php
                     $program = $slide->program;
+                    // Resized WebP variants; originals are multi-MB PNG uploads.
                     $rawImage = $program->horizontal_image;
-                    $imageUrl = null;
-                    if ($rawImage) {
-                        $imageUrl = str_starts_with($rawImage, 'http')
-                            ? $rawImage
-                            : \Illuminate\Support\Facades\Storage::disk('public')->url($rawImage);
-                    }
+                    $imageUrl = $rawImage ? \App\Support\ResponsiveImage::url($rawImage, 1920) : null;
+                    $imageSrcset = \App\Support\ResponsiveImage::srcset($rawImage, [640, 960, 1280, 1920]);
 
                     $rawMobileImage = $program->mobile_hero_image;
-                    $mobileImageUrl = null;
-                    if ($rawMobileImage) {
-                        $mobileImageUrl = str_starts_with($rawMobileImage, 'http')
-                            ? $rawMobileImage
-                            : \Illuminate\Support\Facades\Storage::disk('public')->url($rawMobileImage);
-                    }
+                    $mobileImageUrl = $rawMobileImage ? \App\Support\ResponsiveImage::url($rawMobileImage, 960) : null;
+                    $mobileImageSrcset = \App\Support\ResponsiveImage::srcset($rawMobileImage, [480, 640, 960, 1280]);
                     $description = $program->hero_text;
                 @endphp
 
@@ -106,10 +99,14 @@
                     @if ($imageUrl || $mobileImageUrl)
                         <picture class="absolute inset-0 h-full w-full">
                             @if ($mobileImageUrl)
-                                <source media="(max-width: 767px)" srcset="{{ $mobileImageUrl }}">
+                                <source media="(max-width: 767px)" srcset="{{ $mobileImageSrcset ?: $mobileImageUrl }}" sizes="100vw">
                             @endif
                             <img
                                 src="{{ $imageUrl ?: $mobileImageUrl }}"
+                                @if ($imageUrl ? $imageSrcset : $mobileImageSrcset)
+                                    srcset="{{ $imageUrl ? $imageSrcset : $mobileImageSrcset }}"
+                                    sizes="100vw"
+                                @endif
                                 alt="{{ $program->name }}"
                                 width="1920"
                                 height="720"

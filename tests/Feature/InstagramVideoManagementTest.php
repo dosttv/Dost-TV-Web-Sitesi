@@ -182,7 +182,7 @@ class InstagramVideoManagementTest extends TestCase
             'is_active' => true,
         ]);
 
-        $this->assertEquals(Storage::disk('public')->url('instagram-covers/custom_1080x1920.jpg'), $videoWithManualCover->cover_image_url);
+        $this->assertEquals(\App\Support\ResponsiveImage::url('instagram-covers/custom_1080x1920.jpg', 640), $videoWithManualCover->cover_image_url);
 
         // Priority 2: Fallback to thumbnail_url when cover_image is null
         $videoWithApiThumb = InstagramVideo::create([
