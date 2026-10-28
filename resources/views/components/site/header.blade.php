@@ -81,7 +81,7 @@
         {{-- Logo Section --}}
         <a href="{{ $preview ? 'javascript:void(0)' : route('home') }}" class="flex shrink-0 items-center gap-2">
             @if(!empty($logoUrl))
-                <img src="{{ $logoUrl }}" alt="{{ $logoAltText }}" class="dost-header-logo-img h-auto object-contain">
+                <img src="{{ $logoUrl }}" alt="{{ $logoAltText }}" class="dost-header-logo-img h-auto object-contain lg:w-[120px] lg:max-w-[120px]">
             @else
                 <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-rose-500 to-amber-400 font-black text-slate-950 text-sm sm:h-9 sm:w-9 sm:text-base">D</span>
                 <span class="text-base font-bold tracking-tight text-white sm:text-lg">Dost<span class="text-rose-500">TV</span></span>
@@ -177,8 +177,9 @@
                 padding-right: {{ $dPx }}px;
             }
             #{{ $headerId }} .dost-header-logo-img {
-                max-width: {{ $dW }}px;
-                max-height: {{ max(32, (int)round($dH * 0.55)) }}px;
+                width: 120px;
+                max-width: 120px;
+                max-height: {{ max(48, (int)round($dH * 0.65)) }}px;
             }
             #{{ $headerId }} .dost-header-live-btn {
                 height: {{ $dLiveH }}px;
