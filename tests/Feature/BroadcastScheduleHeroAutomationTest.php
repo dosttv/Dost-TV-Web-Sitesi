@@ -629,4 +629,41 @@ class BroadcastScheduleHeroAutomationTest extends TestCase
 
         Carbon::setTestNow();
     }
+
+    /**
+     * Senaryo 14: Hero slider saat gösteriminde yalnızca başlangıç saati yer alır, bitiş saati gösterilmez.
+     */
+    public function test_hero_slider_displays_only_start_time_and_never_end_time(): void
+    {
+        Carbon::setTestNow('2026-10-21 14:30:00'); // Çarşamba (day_of_week = 2)
+
+        $program = Program::create([
+            'name' => 'Hikmet Arayışları',
+            'slug' => 'hikmet-arayislari',
+            'is_active' => true,
+            'show_on_public' => true,
+        ]);
+
+        $scheduleItem = (object) [
+            'program' => $program,
+            'start_time' => '14:10:00',
+            'end_time' => '15:10:00',
+            'is_live' => false,
+        ];
+
+        $view = $this->blade(
+            '<x-site.home.hero-section :today-schedule="$todaySchedule" :hero-programs="$heroPrograms" />',
+            [
+                'todaySchedule' => collect([$scheduleItem]),
+                'heroPrograms' => collect([$program]),
+            ]
+        );
+
+        $view->assertSee('Her Çarşamba');
+        $view->assertSee('14:10');
+        $view->assertDontSee('15:10');
+        $view->assertDontSee('&ndash;');
+
+        Carbon::setTestNow();
+    }
 }

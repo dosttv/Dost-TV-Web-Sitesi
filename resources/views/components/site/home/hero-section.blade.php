@@ -161,9 +161,6 @@
                                         @endif
                                         <span class="break-words">
                                             Her {{ $dayLabel }} &middot; {{ $slide->start->format('H:i') }}
-                                            @if ($slide->end)
-                                                &ndash;{{ $slide->end->format('H:i') }}
-                                            @endif
                                         </span>
                                     </div>
                                 @endif
