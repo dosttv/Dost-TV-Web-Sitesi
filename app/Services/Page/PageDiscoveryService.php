@@ -58,7 +58,7 @@ class PageDiscoveryService
             'name' => 'Canlı TV Sayfası',
             'page_type' => 'live_tv',
             'target_id' => null,
-            'url' => '/canli-tv',
+            'url' => '/canli-yayin',
             'is_system' => true,
         ]);
 
@@ -325,7 +325,7 @@ class PageDiscoveryService
             'program_detail' => '/programlar/{slug}',
             'program_index' => '/programlar',
             'schedule' => '/yayin-akisi',
-            'live_tv' => '/canli-tv',
+            'live_tv' => '/canli-yayin',
             default => '/',
         };
     }

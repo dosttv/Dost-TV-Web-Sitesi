@@ -142,7 +142,7 @@ class ImportLegacyFooterData extends Command
         );
 
         $primaryItems = [
-            ['title' => 'Canlı TV', 'url' => '/canli-tv', 'item_type' => 'custom'],
+            ['title' => 'Canlı TV', 'url' => '/canli-yayin', 'item_type' => 'custom'],
             ['title' => 'Canlı Radyo', 'url' => '/canli-radyo', 'item_type' => 'custom'],
             ['title' => 'Yayın Akışı', 'url' => '/yayin-akisi', 'item_type' => 'custom'],
             ['title' => 'Programlar', 'url' => '/programlar', 'item_type' => 'custom'],

@@ -81,7 +81,10 @@
     <title>{{ $pageTitle }}</title>
     <meta name="description" content="{{ $metaDescription }}">
     <meta name="robots" content="{{ $robotsDirective }}">
-    <link rel="canonical" href="{{ url()->current() }}">
+    @php
+        $canonicalUrl = str_replace('yeni.dosttv.com', 'dosttv.com', url()->current());
+    @endphp
+    <link rel="canonical" href="{{ $canonicalUrl }}">
 
     <style id="dost-theme-tokens">
         {!! $siteSettings->renderThemeCss($previewThemeSettings) !!}
@@ -91,7 +94,7 @@
     <meta property="og:title" content="{{ $pageTitle }}">
     <meta property="og:description" content="{{ $metaDescription }}">
     <meta property="og:type" content="website">
-    <meta property="og:url" content="{{ url()->current() }}">
+    <meta property="og:url" content="{{ $canonicalUrl }}">
     @if(!empty($ogImage))
         <meta property="og:image" content="{{ $ogImage }}">
     @endif

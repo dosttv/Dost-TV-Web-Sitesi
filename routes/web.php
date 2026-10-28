@@ -35,7 +35,8 @@ Route::get('/arama', [SearchController::class, 'index'])->name('search.index');
 
 Route::get('/yayin-akisi', [ScheduleController::class, 'index'])->name('schedule.index');
 
-Route::get('/canli-tv', [LiveController::class, 'tv'])->name('live.tv');
+Route::permanentRedirect('/canli-tv', '/canli-yayin');
+Route::get('/canli-yayin', [LiveController::class, 'tv'])->name('live.tv');
 Route::get('/canli-radyo', [LiveController::class, 'radio'])->name('live.radio');
 
 use App\Http\Controllers\Admin\CategoryReorderController;

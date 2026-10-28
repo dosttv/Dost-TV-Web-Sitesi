@@ -9,7 +9,7 @@ if (!fs.existsSync(ARTIFACT_DIR)) {
 }
 
 async function main() {
-  console.log('--- INSPECTING CANLI TV ON YENI.DOSTTV.COM ---');
+  console.log('--- INSPECTING CANLI TV ON DOSTTV.COM ---');
 
   const browser = await puppeteer.launch({
     executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -42,8 +42,8 @@ async function main() {
     }
   });
 
-  console.log('Navigating to https://yeni.dosttv.com/canli-tv...');
-  await page.goto('https://yeni.dosttv.com/canli-tv', { waitUntil: 'networkidle2' });
+  console.log('Navigating to https://dosttv.com/canli-yayin...');
+  await page.goto('https://dosttv.com/canli-yayin', { waitUntil: 'networkidle2' });
   await sleep(4000);
 
   // Inspect video element

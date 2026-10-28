@@ -105,7 +105,8 @@ class LiveBroadcastPageTest extends TestCase
             'radio_stream_url' => 'https://example.com/radio.mp3',
         ]);
 
-        $this->get('/canli-tv')->assertStatus(200);
+        $this->get('/canli-yayin')->assertStatus(200);
+        $this->get('/canli-tv')->assertStatus(301)->assertRedirect('/canli-yayin');
         $this->get('/canli-radyo')->assertStatus(200);
     }
 }

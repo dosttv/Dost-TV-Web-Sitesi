@@ -33,7 +33,7 @@ class AnnouncementService
 
         return match (true) {
             $routeName === 'home' || $path === '' => 'home',
-            $routeName === 'live.tv' || $path === 'canli-tv' => 'live_tv',
+            $routeName === 'live.tv' || $path === 'canli-tv' || $path === 'canli-yayin' => 'live_tv',
             $routeName === 'live.radio' || $path === 'canli-radyo' => 'live_radio',
             $routeName === 'schedule.index' || $path === 'yayin-akisi' => 'schedule',
             default => 'other',

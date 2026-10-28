@@ -184,4 +184,29 @@ class LiveBroadcastIntegrationTest extends TestCase
         $response->assertSee('https://www.youtube-nocookie.com/embed/live_stream?channel=DOSTTV');
         $response->assertDontSee('id="hls-player"', false);
     }
+
+    public function test_legacy_canli_tv_permanently_redirects_to_canli_yayin(): void
+    {
+        // 1. /canli-tv returns 301 permanent redirect to /canli-yayin
+        $response = $this->get('/canli-tv');
+        $response->assertStatus(301);
+        $response->assertRedirect('/canli-yayin');
+
+        // 2. /canli-tv/ with trailing slash also redirects to /canli-yayin
+        $responseSlash = $this->get('/canli-tv/');
+        $responseSlash->assertStatus(301);
+        $responseSlash->assertRedirect('/canli-yayin');
+
+        // 3. /canli-yayin returns 200 OK directly
+        $responseLive = $this->get('/canli-yayin');
+        $responseLive->assertOk();
+        $responseLive->assertSee('Özel Canlı TV Başlığı');
+        $responseLive->assertSee('id="hls-player"', false);
+
+        // 4. Following redirect from /canli-tv arrives at /canli-yayin with 200 OK and no loop
+        $followed = $this->followingRedirects()->get('/canli-tv');
+        $followed->assertOk();
+        $followed->assertSee('Özel Canlı TV Başlığı');
+        $followed->assertSee('id="hls-player"', false);
+    }
 }

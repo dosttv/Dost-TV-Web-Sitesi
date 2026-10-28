@@ -37,7 +37,7 @@ class AnnouncementPopupAndPlacementTest extends TestCase
         ]);
 
         $this->get('/')->assertOk()->assertSee('Global Sistem Duyurusu');
-        $this->get('/canli-tv')->assertOk()->assertSee('Global Sistem Duyurusu');
+        $this->get('/canli-yayin')->assertOk()->assertSee('Global Sistem Duyurusu');
         $this->get('/canli-radyo')->assertOk()->assertSee('Global Sistem Duyurusu');
         $this->get('/yayin-akisi')->assertOk()->assertSee('Global Sistem Duyurusu');
         $this->get('/programlar')->assertOk()->assertSee('Global Sistem Duyurusu');
@@ -54,7 +54,7 @@ class AnnouncementPopupAndPlacementTest extends TestCase
         ]);
 
         $this->get('/')->assertOk()->assertSee('Sadece Ana Sayfa Duyurusu');
-        $this->get('/canli-tv')->assertOk()->assertDontSee('Sadece Ana Sayfa Duyurusu');
+        $this->get('/canli-yayin')->assertOk()->assertDontSee('Sadece Ana Sayfa Duyurusu');
         $this->get('/yayin-akisi')->assertOk()->assertDontSee('Sadece Ana Sayfa Duyurusu');
     }
 
@@ -70,7 +70,7 @@ class AnnouncementPopupAndPlacementTest extends TestCase
 
         $this->get('/yayin-akisi')->assertOk()->assertSee('Yayın Akışı Özel Duyurusu');
         $this->get('/')->assertOk()->assertDontSee('Yayın Akışı Özel Duyurusu');
-        $this->get('/canli-tv')->assertOk()->assertDontSee('Yayın Akışı Özel Duyurusu');
+        $this->get('/canli-yayin')->assertOk()->assertDontSee('Yayın Akışı Özel Duyurusu');
     }
 
     public function test_live_tv_placement_announcement_renders_only_on_live_tv_page(): void
@@ -83,7 +83,7 @@ class AnnouncementPopupAndPlacementTest extends TestCase
             'is_active' => true,
         ]);
 
-        $this->get('/canli-tv')->assertOk()->assertSee('Canlı TV Canlı Yayın Bilgilendirmesi');
+        $this->get('/canli-yayin')->assertOk()->assertSee('Canlı TV Canlı Yayın Bilgilendirmesi');
         $this->get('/')->assertOk()->assertDontSee('Canlı TV Canlı Yayın Bilgilendirmesi');
         $this->get('/canli-radyo')->assertOk()->assertDontSee('Canlı TV Canlı Yayın Bilgilendirmesi');
     }
@@ -100,7 +100,7 @@ class AnnouncementPopupAndPlacementTest extends TestCase
 
         $this->get('/canli-radyo')->assertOk()->assertSee('Canlı Radyo Frekans Duyurusu');
         $this->get('/')->assertOk()->assertDontSee('Canlı Radyo Frekans Duyurusu');
-        $this->get('/canli-tv')->assertOk()->assertDontSee('Canlı Radyo Frekans Duyurusu');
+        $this->get('/canli-yayin')->assertOk()->assertDontSee('Canlı Radyo Frekans Duyurusu');
     }
 
     public function test_expired_announcement_is_not_rendered(): void
@@ -248,7 +248,7 @@ class AnnouncementPopupAndPlacementTest extends TestCase
         $scheduleResponse->assertOk();
         $scheduleResponse->assertDontSee('DOST TV Test Duyurusu');
 
-        $liveTvResponse = $this->get('/canli-tv');
+        $liveTvResponse = $this->get('/canli-yayin');
         $liveTvResponse->assertOk();
         $liveTvResponse->assertDontSee('DOST TV Test Duyurusu');
 

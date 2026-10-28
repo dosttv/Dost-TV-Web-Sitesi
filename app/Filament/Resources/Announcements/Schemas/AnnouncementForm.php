@@ -83,7 +83,7 @@ class AnnouncementForm
 
                                     TextInput::make('button_url')
                                         ->label('Buton Bağlantı Adresi (URL)')
-                                        ->placeholder('Örn: /canli-tv veya https://...')
+                                        ->placeholder('Örn: /canli-yayin veya https://...')
                                         ->maxLength(255)
                                         ->helperText('Duyuruya tıklandığında açılacak sayfa bağlantısı. Boşsa buton gösterilmez.'),
                                 ])->columnSpanFull(),
